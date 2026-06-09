@@ -60,10 +60,10 @@ OUT_DIR="${OUT_DIR:-${ROOT_DIR}/executables/${CELL_LINE}/outputs/calibration_con
 WORK_ROOT="${WORK_ROOT:-${OUT_DIR}/abm_evals}"
 
 # Staged control calibration budgets: global search + 24h + 24+48h + full curve
-GLOBAL_NFEV="${GLOBAL_NFEV:-40}"
-STAGE_NFEV="${STAGE_NFEV:-40,50,60}"
+GLOBAL_NFEV="${GLOBAL_NFEV:-0}"
+STAGE_NFEV="${STAGE_NFEV:-50,60,80}"
 MAX_NFEV="${MAX_NFEV:-150}"
-REPLICATES="${REPLICATES:-2}"
+REPLICATES="${REPLICATES:-1}"
 ABM_BASE_SEED="${ABM_BASE_SEED:-1234}"
 ABM_SEED_STEP="${ABM_SEED_STEP:-17}"
 DIFF_STEP="${DIFF_STEP:-0.03}"
@@ -143,8 +143,11 @@ echo "  Fitted parameters: ${OUT_DIR}/calibrated_parameters.csv"
 echo "  Fit result: ${OUT_DIR}/fit_result.json"
 echo "  Live plot: ${OUT_DIR}/live_calibration_latest.png"
 echo ""
-echo "Workflow: global search (${GLOBAL_NFEV} evals) -> staged local fits (${STAGE_NFEV})"
-echo "  Metric: viable cells, log-space residuals, ${REPLICATES} replicate(s)/eval"
+echo "Workflow: staged local fits (${STAGE_NFEV}) on viable cells (ROS neutralized for control)"
+if [[ "${GLOBAL_NFEV}" != "0" ]]; then
+  echo "  Optional global search: ${GLOBAL_NFEV} evals (only kept if better than LM x0)"
+fi
+echo "  Replicates/eval: ${REPLICATES}"
 echo ""
 echo "After validating the control curve, run treated cases with:"
 echo "  ./executables/${CELL_LINE}/run_treat_30s.sh"

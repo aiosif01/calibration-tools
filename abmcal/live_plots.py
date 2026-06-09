@@ -8,11 +8,19 @@ import matplotlib.pyplot as plt
 
 
 class LiveCalibrationPlotter:
-    def __init__(self, out_dir: str | Path, *, live: bool = True, title: str = "ABM4bio LM calibration"):
+    def __init__(
+        self,
+        out_dir: str | Path,
+        *,
+        live: bool = True,
+        title: str = "ABM4bio LM calibration",
+        parameter_names: Sequence[str] | None = None,
+    ):
         self.out_dir = Path(out_dir)
         self.out_dir.mkdir(parents=True, exist_ok=True)
         self.live = bool(live)
         self.title = title
+        self.parameter_names = list(parameter_names or [])
         self.history: list[dict] = []
         self.fig = None
         self.axes = None
@@ -58,7 +66,9 @@ class LiveCalibrationPlotter:
         h = self.history
         evals = [r["eval"] for r in h]
         for i in range(len(params_arr)):
-            ax0.plot(evals, [r[f"p{i+1}"] for r in h], marker="o", label=f"p{i+1}")
+            label = self.parameter_names[i] if i < len(self.parameter_names) else f"p{i+1}"
+            short = label.split("/")[-1] if "/" in label else label
+            ax0.plot(evals, [r[f"p{i+1}"] for r in h], marker="o", label=short)
         ax0.set_xlabel("Function evaluation")
         ax0.set_ylabel("Parameter value")
         ax0.set_title("Parameter convergence")

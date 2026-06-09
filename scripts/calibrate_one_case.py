@@ -80,12 +80,12 @@ def main() -> None:
     ap.add_argument("--method", choices=["trf", "dogbox", "lm"], default="trf")
     ap.add_argument("--sigma", default="data", help="'data' uses Excel SD; otherwise constant numeric value like 0.45")
     ap.add_argument("--max-nfev", type=int, default=150, help="Max evals for non-staged single fit.")
-    ap.add_argument("--global-nfev", type=int, default=40, help="Global dual_annealing evals before staged local fits (control-mode).")
+    ap.add_argument("--global-nfev", type=int, default=0, help="Optional global dual_annealing evals before staged local fits (control-mode).")
     ap.add_argument("--global-seed", type=int, default=1234)
-    ap.add_argument("--stage-nfev", default="40,50,60", help="Local fit budget per stage: 24h, 24+48h, full curve.")
+    ap.add_argument("--stage-nfev", default="50,60,80", help="Local fit budget per stage: 24h, 24+48h, full curve.")
     ap.add_argument("--staged", action=argparse.BooleanOptionalAction, default=True, help="Use 24h -> 24+48h -> 72h staged control calibration.")
     ap.add_argument("--log-space", action=argparse.BooleanOptionalAction, default=True, help="Fit log-space residuals for t>0.")
-    ap.add_argument("--replicates", type=int, default=2, help="ABM replicates averaged per evaluation.")
+    ap.add_argument("--replicates", type=int, default=1, help="ABM replicates averaged per evaluation.")
     ap.add_argument("--abm-base-seed", type=int, default=1234)
     ap.add_argument("--abm-seed-step", type=int, default=17)
     ap.add_argument("--xtol", type=float, default=1e-6)
@@ -168,7 +168,12 @@ def main() -> None:
             f"(staged={args.staged}, global_nfev={args.global_nfev}, replicates={ctx.replicates})...",
             flush=True,
         )
-    plotter = LiveCalibrationPlotter(out_dir, live=args.live, title=f"{args.cell_line} {exposure_label} {title_suffix}")
+    plotter = LiveCalibrationPlotter(
+        out_dir,
+        live=args.live,
+        title=f"{args.cell_line} {exposure_label} {title_suffix}",
+        parameter_names=parameter_keys or [],
+    )
 
     if args.control_mode and parameter_keys:
         result = run_control_calibration(

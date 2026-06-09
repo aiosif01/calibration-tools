@@ -11,6 +11,7 @@ from .abm_runner import ABMRunConfig, calibration_input_overrides, run_abm_once
 from .calibration_params import (
     CONTROL_CALIBRATION_STAGES,
     CONTROL_CAP_OVERRIDES,
+    CONTROL_PROLIFERATION_OVERRIDES,
     parameter_overrides_from_vector,
 )
 from .data_loader import select_target_vector
@@ -72,6 +73,7 @@ def make_simulate_factory(ctx: CalibrationContext, config: ABMRunConfig) -> Call
             row_overrides = dict(ctx.calibration_overrides)
             if ctx.control_mode:
                 row_overrides.update(CONTROL_CAP_OVERRIDES)
+                row_overrides.update(CONTROL_PROLIFERATION_OVERRIDES)
             row_overrides.update(parameter_overrides_from_vector(ctx.parameter_keys, params))
             if ctx.set_cap_duration:
                 exposure_h = float(ctx.exposure_seconds) / 3600.0

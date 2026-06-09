@@ -21,12 +21,13 @@ TREATED_MECHANISM12_PARAMETER_KEYS: tuple[str, ...] = (
 
 INT_PARAMETER_KEYS: frozenset[str] = frozenset({"cancer_cell/can_divide/time_window"})
 
+# LM-calibrated control growth defaults (ABM4bio prepare_control_input.py / input_control.csv)
 CONTROL_MECHANISM12_X0: tuple[float, ...] = (
-    0.823441629895,
-    0.000232465905465,
-    1.278261769119,
-    0.743507272804,
-    288.0,
+    0.84592981,
+    0.0029217516,
+    0.4556126,
+    0.52025049,
+    319.0,
 )
 CONTROL_MECHANISM12_LB: tuple[float, ...] = (0.30, 0.0001, 0.05, 0.01, 50.0)
 CONTROL_MECHANISM12_UB: tuple[float, ...] = (0.99, 0.25, 1.5, 0.70, 500.0)
@@ -39,6 +40,21 @@ CONTROL_CAP_OVERRIDES: dict[str, object] = {
     "CAP/enabled": False,
     "CAP/duration_h": 0.0,
     "CAP/duration_steps": 0,
+}
+
+# Untreated control calibration must decouple ROS/damage (ABM4bio prepare_control_input.py).
+CONTROL_PROLIFERATION_OVERRIDES: dict[str, object] = {
+    "cancer_cell/intracellular/uptake/H2O2": 0.0,
+    "cancer_cell/intracellular/uptake/NO2_": 0.0,
+    "cancer_cell/intracellular/damage/k_induction": 0.0,
+    "cancer_cell/intracellular/damage/probability": 0.0,
+    "cancer_cell/can_divide/CAP_sensitivity": 0.0,
+    "H2O2/initial_value": 0.0,
+    "H2O2/diffusion_coefficient": 0.0,
+    "H2O2/dissipation_coefficient": 0.0,
+    "NO2_/initial_value": 0.0,
+    "NO2_/diffusion_coefficient": 0.0,
+    "NO2_/dissipation_coefficient": 0.0,
 }
 
 CONTROL_CALIBRATION_STAGES: tuple[tuple[int, ...], ...] = (
@@ -103,10 +119,7 @@ def default_fit_bounds(
         x0 = CONTROL_MECHANISM12_X0
         lb = CONTROL_MECHANISM12_LB
         ub = CONTROL_MECHANISM12_UB
-        if template_path is not None:
-            from_template = read_template_parameter_values(template_path, CONTROL_MECHANISM12_PARAMETER_KEYS)
-            if from_template is not None:
-                x0 = tuple(from_template)
+        # Control proliferation uses LM growth defaults, not mechanism-12 CAP template values.
         return comma(x0), comma(lb), comma(ub)
     if keys == TREATED_MECHANISM12_PARAMETER_KEYS or (
         parameter_keys and all("probability" in k for k in parameter_keys) and len(parameter_keys) == 3

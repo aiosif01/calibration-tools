@@ -72,6 +72,27 @@ def compute_weighted_residuals(
     return (y_data - y_sim) / sigma_arr
 
 
+def viability_penalty_residuals(y_data: np.ndarray, y_sim: np.ndarray) -> np.ndarray:
+    """Penalize culture collapse and severe undergrowth (ABM4bio-style guardrails)."""
+    penalties: list[float] = []
+    y_data = np.asarray(y_data, dtype=float)
+    y_sim = np.asarray(y_sim, dtype=float)
+    if len(y_sim) >= 2 and y_sim[1] < 0.6 * max(y_data[1], 1.0):
+        penalties.append(3.0 * (0.6 * y_data[1] - y_sim[1]))
+    if len(y_sim) >= 3 and y_sim[-1] < 0.25 * max(y_data[-1], 1.0):
+        penalties.append(8.0 * (0.25 * y_data[-1] - y_sim[-1]))
+    if len(y_sim) >= 2 and y_sim[-1] <= 0.05:
+        penalties.append(15.0)
+    return np.asarray(penalties, dtype=float)
+
+
+def combine_residuals(base: np.ndarray, y_data: np.ndarray, y_sim: np.ndarray) -> np.ndarray:
+    extra = viability_penalty_residuals(y_data, y_sim)
+    if extra.size == 0:
+        return base
+    return np.concatenate([base, extra])
+
+
 def normalize_simulation(y_sim: np.ndarray, *, normalize_sim_to_t0: bool) -> np.ndarray:
     y_sim = np.asarray(y_sim, dtype=float)
     if not normalize_sim_to_t0:
@@ -119,12 +140,16 @@ def fit_lm_like(
                 flush=True,
             )
         y_sim = normalize_simulation(simulate(x), normalize_sim_to_t0=normalize_sim_to_t0)
-        residuals = compute_weighted_residuals(
+        residuals = combine_residuals(
+            compute_weighted_residuals(
+                y_data,
+                y_sim,
+                sigma_arr,
+                log_space=log_space,
+                exclude_t0=exclude_t0_residuals,
+            ),
             y_data,
             y_sim,
-            sigma_arr,
-            log_space=log_space,
-            exclude_t0=exclude_t0_residuals,
         )
         chi2 = float(np.sum(residuals ** 2))
         if live_plotter is not None:
@@ -201,6 +226,31 @@ def fit_lm_like(
     )
 
 
+def _evaluate_cost(
+    simulate: Callable[[Sequence[float]], np.ndarray],
+    x: np.ndarray,
+    *,
+    y_data: np.ndarray,
+    sigma_arr: np.ndarray,
+    normalize_sim_to_t0: bool,
+    log_space: bool,
+    exclude_t0_residuals: bool,
+) -> tuple[float, np.ndarray]:
+    y_sim = normalize_simulation(simulate(x), normalize_sim_to_t0=normalize_sim_to_t0)
+    residuals = combine_residuals(
+        compute_weighted_residuals(
+            y_data,
+            y_sim,
+            sigma_arr,
+            log_space=log_space,
+            exclude_t0=exclude_t0_residuals,
+        ),
+        y_data,
+        y_sim,
+    )
+    return float(np.sum(residuals ** 2)), y_sim
+
+
 def fit_global_search(
     simulate: Callable[[Sequence[float]], np.ndarray],
     *,
@@ -215,37 +265,71 @@ def fit_global_search(
     log_space: bool = True,
     exclude_t0_residuals: bool = True,
     seed: int = 1234,
+    live_plotter: LiveCalibrationPlotter | None = None,
     verbose: bool = False,
 ) -> tuple[np.ndarray, float, int]:
     y_data = np.asarray(y_data, dtype=float)
+    t_arr = np.asarray(t, dtype=float)
     sigma_arr = _prepare_sigma(sigma, y_data)
     eval_counter = {"n": 0}
+    x_start = np.asarray(x0, dtype=float)
+    try:
+        best_cost, _ = _evaluate_cost(
+            simulate,
+            x_start,
+            y_data=y_data,
+            sigma_arr=sigma_arr,
+            normalize_sim_to_t0=normalize_sim_to_t0,
+            log_space=log_space,
+            exclude_t0_residuals=exclude_t0_residuals,
+        )
+    except Exception:
+        best_cost = 1.0e12
+    best_x = x_start.copy()
 
     def objective(x: np.ndarray) -> float:
+        nonlocal best_cost, best_x
         eval_counter["n"] += 1
         if verbose:
             print(f"\n=== Global search: evaluation {eval_counter['n']} / up to {max_nfev} ===", flush=True)
         try:
-            y_sim = normalize_simulation(simulate(x), normalize_sim_to_t0=normalize_sim_to_t0)
-            residuals = compute_weighted_residuals(
-                y_data,
-                y_sim,
-                sigma_arr,
+            cost, y_sim = _evaluate_cost(
+                simulate,
+                x,
+                y_data=y_data,
+                sigma_arr=sigma_arr,
+                normalize_sim_to_t0=normalize_sim_to_t0,
                 log_space=log_space,
-                exclude_t0=exclude_t0_residuals,
+                exclude_t0_residuals=exclude_t0_residuals,
             )
-            return float(np.sum(residuals ** 2))
         except Exception:
             return 1.0e12
+        if cost < best_cost:
+            best_cost = cost
+            best_x = np.asarray(x, dtype=float).copy()
+        if live_plotter is not None:
+            display_residuals = y_data - y_sim
+            live_plotter.update(
+                eval_id=eval_counter["n"],
+                params=x,
+                chi2=cost,
+                t=t_arr,
+                y_data=y_data,
+                y_fit=y_sim,
+                residuals=display_residuals,
+                stage="global",
+            )
+        return cost
 
-    result = dual_annealing(
+    dual_annealing(
         objective,
         bounds=list(zip(lb, ub)),
         maxfun=max_nfev,
-        x0=np.asarray(x0, dtype=float),
+        x0=x_start,
         seed=seed,
     )
-    return np.asarray(result.x, dtype=float), float(result.fun), int(eval_counter["n"])
+    # Never return a global candidate worse than the starting template point.
+    return best_x, float(best_cost), int(eval_counter["n"])
 
 
 def fit_staged_control(
@@ -292,6 +376,7 @@ def fit_staged_control(
             normalize_sim_to_t0=normalize_sim_to_t0,
             log_space=log_space,
             seed=global_seed,
+            live_plotter=live_plotter,
             verbose=verbose,
         )
         total_nfev += n_global
