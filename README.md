@@ -2,6 +2,8 @@
 
 This package recreates the MATLAB Levenberg–Marquardt workflow in Python and adds live calibration plots.
 
+**This repo is calibration-only.** It does not bundle or build ABM4bio. Simulation binaries and BioDynaMo live in a separate checkout (default: `~/Desktop/ABM4bio`).
+
 The original MATLAB workflow did three things:
 
 1. Replace three placeholders in an ABM4bio input CSV:
@@ -24,19 +26,86 @@ This Python version does the same, but also:
 ## Folder structure
 
 ```text
-abm4bio_lm_python_calibration/
-  abmcal/                         Python package
-  scripts/                        CLI scripts
-  templates/
-    input_TEMPLATE_m11_from_matlab_lm.csv
-    input_mechanism12_CAP_template.csv
-    initial_cells.dat
-  data/
-    Data Modeling CCA+PDAC 0 to 72h post Gorjet - WITH MEAN 4 experiments.xlsx
-    calibration_targets_from_excel.csv
-    mean_sd_discrepancy_report.csv
+calibration-tools/
+  abmcal/                         Python calibration package
+  scripts/                        CLI scripts + abm_env.sh path resolver
+  executables/<CELL_LINE>/        per-line launchers (calibrate_control.sh, run_treat_*.sh)
+  templates/                      ABM input CSV templates (used by calibration)
+  data/                           experimental targets
   outputs/                        generated during calibration
+
+~/Desktop/ABM4bio/                external ABM4bio + BioDynaMo (not in this repo)
+  build/ABM4bio                   simulation executable
+  libs/biodynamo-v1.05.143/       BioDynaMo runtime
 ```
+
+## External ABM4bio setup
+
+1. Build ABM4bio once in the external repo:
+
+```bash
+cd ~/Desktop/ABM4bio
+make fresh BUILD_JOBS=4
+```
+
+2. Tell calibration-tools where to find it (pick one):
+
+```bash
+# Option A — one-time copy (recommended)
+cp scripts/abm_paths.local.sh.example scripts/abm_paths.local.sh
+# edit ABM4BIO_ROOT if needed
+
+# Option B — per-shell export
+export ABM4BIO_ROOT=~/Desktop/ABM4bio
+export ABM_BIN=~/Desktop/ABM4bio/build/ABM4bio
+```
+
+3. Run calibration:
+
+```bash
+./executables/EGI1/calibrate_control.sh
+```
+
+### Custom ABM4bio fork (extra parameters / different C++ setup)
+
+Keep a second checkout as a sibling repo, build it separately, then point calibration at it:
+
+```bash
+# In scripts/abm_paths.local.sh:
+export ABM4BIO_ROOT="${HOME}/Desktop/ABM4bio-custom"
+export ABM_BIN="${ABM4BIO_ROOT}/build/ABM4bio"
+```
+
+Or use per-cell-line binaries when only some lines need a custom build:
+
+```bash
+export ABM_BIN_EGI1="${HOME}/Desktop/ABM4bio-custom/build/ABM4bio"
+export ABM_BIN_HuCCT1="${HOME}/Desktop/ABM4bio/build/ABM4bio"
+```
+
+Templates and parameter overrides stay in **this** repo (`templates/`, Python calibration code). C++ model changes stay in the **ABM4bio** repo you point at.
+
+### Central configuration
+
+Edit **`config/calibration_settings.py`** to change mechanism, per-cell-line templates, LM budgets (`stage_nfev`, `global_nfev`), early-stop thresholds, and default bounds. Shell launchers read these defaults via `--use-config`.
+
+```bash
+python scripts/show_calibration_config.py              # all cell lines
+python scripts/show_calibration_config.py --cell-line EGI1
+```
+
+### Control vs treated templates
+
+| Workflow | Template (per cell line) | Mechanism |
+|---|---|---|
+| Control proliferation (`calibrate_control.sh`) | `templates/cell_lines/<CELL_LINE>/input_control_mechanism11.csv` | 11 — normoxic_CC (MATLAB LM parity) |
+| CAP-treated cases (`run_treat_*.sh`) | `templates/cell_lines/<CELL_LINE>/input_mechanism12_treated.csv` | 12 — CAP + DNA damage |
+
+Shared base templates live under `templates/` (e.g. `input_control_mechanism11_template.csv`). Copy or customize per line under `templates/cell_lines/`.
+
+Do **not** use the mechanism-12 CAP template for untreated control calibration: mechanism 12 runs a DNA-damage cascade that drives cells into distress/apoptosis even with CAP disabled, producing flat or collapsing growth curves.
+
+Control calibration (mechanism 11) uses an **O2-only** microenvironment (`diffusion_grid/biochemicals=O2`; no OH_/RONS). It fits **7 parameters**: grow / divide probabilities, grow diameter rate, **cell-cycle dwell** (`G1`, `Sy`, `G2` in **simulated hours**), and divide maturity (**hours**). Python converts hours → ABM **steps** using `steps = round(hours / time_step)` (`MECHANISM11_TIME_STEP_H` in config; default **1 h** → **72 steps** for a 72 h run). Fixed apoptose aging/cleanup windows are also hour-based (`2500 h` / `5000 h` → steps at runtime). Template CSV stores steps for standalone ABM runs; calibration overrides rescale if `time_step` changes. Sequential warm-start **0–24 h → 0–48 h → 0–72 h** with `HORIZON_GATE`. ABM runs omit RNG seed by default.
 
 ## Install
 

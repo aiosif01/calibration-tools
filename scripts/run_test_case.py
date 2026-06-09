@@ -15,7 +15,12 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from abmcal.abm_runner import ABMRunConfig, run_abm_once
+from abmcal.abm_runner import ABMRunConfig, calibration_input_overrides, run_abm_once
+from abmcal.calibration_params import (
+    CONTROL_CAP_OVERRIDES,
+    CONTROL_PROLIFERATION_OVERRIDES,
+    CONTROL_RUNTIME_OVERRIDES,
+)
 from abmcal.data_loader import exposure_pretty, read_cap_excel_long, select_target_vector
 
 
@@ -189,6 +194,11 @@ def main() -> None:
         ),
     )
     ap.add_argument("--set-cap-duration", action="store_true", help="Override CAP duration rows from --exposure-seconds.")
+    ap.add_argument(
+        "--control-mode",
+        action="store_true",
+        help="Untreated control run: mechanism-10 template overrides (ROS off, CAP off).",
+    )
     ap.add_argument("--mock", action=argparse.BooleanOptionalAction, default=False, help="Use the built-in mock simulator instead of ABM4bio.")
     ap.add_argument("--quiet", action="store_true", help="Suppress live ABM stdout/progress bar.")
     ap.add_argument(
@@ -212,6 +222,14 @@ def main() -> None:
     time_points = parse_int_list(args.time_points)
     time_step_h = read_template_time_step_hours(args.template, default=1.0)
     row_overrides = build_row_overrides(params, parameter_keys, args.exposure_seconds, time_step_h, args.set_cap_duration)
+    if not args.mock:
+        row_overrides.update(calibration_input_overrides(args.template))
+        row_overrides.setdefault("export_visualization", False)
+        row_overrides.setdefault("visualization_interval", 999_999)
+    if args.control_mode or (args.exposure_seconds == 0 and not args.set_cap_duration):
+        row_overrides.update(CONTROL_RUNTIME_OVERRIDES)
+        row_overrides.update(CONTROL_CAP_OVERRIDES)
+        row_overrides.update(CONTROL_PROLIFERATION_OVERRIDES)
 
     out_dir = Path(args.out_dir)
     run_dir = Path(args.run_dir) if args.run_dir else out_dir
@@ -232,7 +250,9 @@ def main() -> None:
         time_points=time_points,
         copy_files=tuple(Path(x) for x in args.copy_file if x),
         mock=args.mock,
+        output_metric="viable_cells",
         remove_results_input_copy=not args.mock,
+        strip_visualization_after_run=not args.mock,
         stream_stdout=not args.mock and not args.quiet,
     )
     sim_values = run_abm_once(

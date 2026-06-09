@@ -20,25 +20,6 @@ activate_python_env() {
 # shellcheck disable=SC1091
 source "${ROOT_DIR}/scripts/abm_env.sh"
 
-resolve_abm_bin() {
-  local candidates=(
-    "${ABM_BIN:-}"
-    "${ROOT_DIR}/ABM4bio_${CELL_LINE:-EGI1}"
-    "${ROOT_DIR}/ABM4bio"
-    "${ROOT_DIR}/build/ABM4bio"
-    "/home/aiwsif/Desktop/ABM4bio/build/ABM4bio"
-  )
-  local candidate
-  for candidate in "${candidates[@]}"; do
-    if [[ -n "${candidate}" && -x "${candidate}" ]]; then
-      echo "${candidate}"
-      return 0
-    fi
-  done
-  echo ""
-  return 1
-}
-
 activate_python_env
 
 PYTHON_BIN="${PYTHON_BIN:-${ROOT_DIR}/.venv/bin/python}"
@@ -49,7 +30,7 @@ CELL_LINE="${CELL_LINE:-EGI1}"
 EXPOSURE_SECONDS="${EXPOSURE_SECONDS:-0}"
 TARGET_MODE="${TARGET_MODE:-t0_normalized}"
 TIME_POINTS="${TIME_POINTS:-0,24,48,72}"
-TEMPLATE_PATH="${TEMPLATE_PATH:-${ROOT_DIR}/templates/input_mechanism12_CAP_template.csv}"
+TEMPLATE_PATH="${TEMPLATE_PATH:-${ROOT_DIR}/templates/input_control_mechanism10_template.csv}"
 TARGETS_CSV="${TARGETS_CSV:-${ROOT_DIR}/data/calibration_targets_from_excel.csv}"
 XLSX_PATH="${XLSX_PATH:-}"
 OUT_DIR="${OUT_DIR:-${ROOT_DIR}/outputs/test_template_case}"
@@ -64,10 +45,10 @@ SET_CAP_DURATION="${SET_CAP_DURATION:-0}"
 if [[ "${MOCK_MODE}" == "1" ]]; then
   RUN_COMMAND="${RUN_COMMAND:-make}"
 else
-  ABM_BIN="${ABM_BIN:-$(resolve_abm_bin || true)}"
-  if [[ -z "${ABM_BIN}" || ! -x "${ABM_BIN}" ]]; then
+  ABM_BIN="${ABM_BIN:-$(resolve_abm_bin "${CELL_LINE}" || true)}"
+  if [[ -z "${ABM_BIN}" || ! -f "${ABM_BIN}" || ! -x "${ABM_BIN}" ]]; then
     echo "Error: ABM executable not found for real simulation." >&2
-    echo "Set ABM_BIN or RUN_COMMAND, or place the binary at ${ROOT_DIR}/ABM4bio" >&2
+    abm_paths_hint
     exit 1
   fi
   RUN_COMMAND="${RUN_COMMAND:-${ABM_BIN} input.csv}"

@@ -7,11 +7,56 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from .calibration_params import parameter_plot_color, parameter_plot_label
+
 PROBABILITY_COLORS = {
     "Apoptosis": "#4472C4",
     "Growth": "#ED7D31",
     "Division": "#FFC000",
 }
+
+
+def plot_fitted_parameters_bars(
+    out_path: str | Path,
+    *,
+    exposure_label: str,
+    parameter_keys: Sequence[str],
+    fitted_values: Sequence[float],
+    parameter_sigmas: Sequence[float] | None = None,
+    title: str,
+) -> None:
+    """Bar chart of all fitted parameters with descriptive legend labels."""
+    out_path = Path(out_path)
+    keys = list(parameter_keys)
+    values = np.asarray(fitted_values, dtype=float)
+    labels = [parameter_plot_label(k) for k in keys]
+    colors = [parameter_plot_color(k, i) for i, k in enumerate(keys)]
+    errs = None
+    if parameter_sigmas is not None:
+        errs = np.nan_to_num(np.asarray(parameter_sigmas, dtype=float), nan=0.0)
+        # Ill-conditioned Jacobians inflate sigma_a; cap display at 35% of each bar for readability.
+        rel_cap = np.maximum(np.abs(values) * 0.35, 1.0e-6)
+        errs = np.minimum(errs, rel_cap)
+
+    fig, ax = plt.subplots(figsize=(max(8, 1.2 * len(keys)), 5.5))
+    x = np.arange(len(keys))
+    ax.bar(x, values, color=colors, edgecolor="black", linewidth=0.6)
+    if errs is not None and np.any(errs > 0):
+        ax.errorbar(x, values, yerr=errs, fmt="none", ecolor="black", elinewidth=1.2, capsize=4)
+    ax.set_ylabel("Parameter value")
+    ax.set_xlabel(f"Fitted parameters — {exposure_label}")
+    ax.set_title("Calibrated parameters")
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, rotation=25, ha="right")
+    ymax = float(np.max(values)) if len(values) else 1.0
+    if ymax <= 1.0:
+        ax.set_ylim(0, min(1.0, max(0.05, ymax * 1.25)))
+    else:
+        ax.set_ylim(0, ymax * 1.15)
+    fig.suptitle(title)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=220)
+    plt.close(fig)
 PREFERRED_EXPOSURE_ORDER = ["Control", "Treat:30s", "Treat:2min", "Treat:4min", "Treat:5min"]
 
 
@@ -105,7 +150,12 @@ def plot_probability_bars(
     for j, (name, values, errs) in enumerate(metrics):
         offsets = x + (j - 1) * width
         color = PROBABILITY_COLORS[name]
-        ax.bar(offsets, values, width, label=name, color=color, edgecolor="black", linewidth=0.6)
+        legend_label = {
+            "Apoptosis": "Apoptosis probability",
+            "Growth": "Growth probability",
+            "Division": "Division probability",
+        }.get(name, name)
+        ax.bar(offsets, values, width, label=legend_label, color=color, edgecolor="black", linewidth=0.6)
         if errs is not None:
             yerr = np.asarray(errs, dtype=float)
             yerr = np.nan_to_num(yerr, nan=0.0, posinf=0.0, neginf=0.0)
@@ -175,24 +225,32 @@ def save_calibration_result_plots(
         title=title,
     )
 
-    apoptosis = [float(fitted_values[0])]
-    growth = [float(fitted_values[1])]
-    division = [float(fitted_values[2])]
-    apoptosis_err = [float(parameter_sigmas[0])] if parameter_sigmas else None
-    growth_err = [float(parameter_sigmas[1])] if parameter_sigmas else None
-    division_err = [float(parameter_sigmas[2])] if parameter_sigmas else None
-
-    plot_probability_bars(
-        out_dir / f"{prefix}_03_probability_bars.png",
-        exposure_labels=[exposure_label],
-        apoptosis=apoptosis,
-        growth=growth,
-        division=division,
-        apoptosis_err=apoptosis_err,
-        growth_err=growth_err,
-        division_err=division_err,
-        title=title,
-    )
+    # Legacy 3-probability bar chart when exactly apoptosis / growth / division probs.
+    if (
+        len(parameter_keys) == 3
+        and all("probability" in k for k in parameter_keys)
+        and len(fitted_values) == 3
+    ):
+        plot_probability_bars(
+            out_dir / f"{prefix}_03_probability_bars.png",
+            exposure_labels=[exposure_label],
+            apoptosis=[float(fitted_values[0])],
+            growth=[float(fitted_values[1])],
+            division=[float(fitted_values[2])],
+            apoptosis_err=[float(parameter_sigmas[0])] if parameter_sigmas else None,
+            growth_err=[float(parameter_sigmas[1])] if parameter_sigmas else None,
+            division_err=[float(parameter_sigmas[2])] if parameter_sigmas else None,
+            title=title,
+        )
+    else:
+        plot_fitted_parameters_bars(
+            out_dir / f"{prefix}_03_fitted_parameters.png",
+            exposure_label=exposure_label,
+            parameter_keys=parameter_keys,
+            fitted_values=fitted_values,
+            parameter_sigmas=parameter_sigmas,
+            title=title,
+        )
 
 
 def make_summary_bar_plots(summary_df: pd.DataFrame, out_dir: str | Path, *, title_prefix: str = "") -> None:

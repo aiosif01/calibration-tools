@@ -35,13 +35,13 @@ def render_template(
         for line in lines:
             stripped = line.strip()
             if not stripped or stripped.startswith("#") or stripped.startswith("###"):
-                rendered_lines.append(line)
+                rendered_lines.append(_sanitize_comment_line(line))
                 continue
             parts = [p.strip() for p in line.split(",")]
             if len(parts) >= 3 and parts[0] in parameter_overrides:
                 parts[2] = _format_value(parameter_overrides[parts[0]])
                 applied_keys.add(parts[0])
-                rendered_lines.append(", ".join(parts))
+                rendered_lines.append(",".join(parts))
             else:
                 rendered_lines.append(line)
         for key, value in parameter_overrides.items():
@@ -52,6 +52,18 @@ def render_template(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(text)
+
+
+def _sanitize_comment_line(line: str) -> str:
+    """ABM4bio CSV rows must have exactly 3 columns; commas in ### headers break parsing."""
+    stripped = line.strip()
+    if stripped.startswith("###") and stripped.endswith(",###,###"):
+        prefix = "### "
+        suffix = ",###,###"
+        body = stripped[len("###") : -len(suffix)].strip()
+        body = body.replace(",", " ")
+        return f"{prefix}{body}{suffix}"
+    return line
 
 
 def _format_value(value: Any) -> str:

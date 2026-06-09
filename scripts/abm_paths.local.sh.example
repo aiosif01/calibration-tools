@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Copy to scripts/abm_paths.local.sh and adjust for your machine.
+# That file is gitignored; use it to point at your ABM4bio checkout(s).
+
+# Primary ABM4bio source tree (build with: cd "$ABM4BIO_ROOT" && make fresh)
+export ABM4BIO_ROOT="${HOME}/Desktop/ABM4bio"
+
+# Optional: override the executable directly (skips resolve_abm_bin search)
+# export ABM_BIN="${ABM4BIO_ROOT}/build/ABM4bio"
+
+# Optional: per-cell-line binaries (e.g. after building forks with different parameters)
+# export ABM_BIN_EGI1="${HOME}/Desktop/ABM4bio-custom/build/ABM4bio"
+# export ABM_BIN_HuCCT1="${ABM4BIO_ROOT}/build/ABM4bio"
+
+# Optional: custom fork for experimental C++ changes (sibling checkout)
+# export ABM4BIO_ROOT="${HOME}/Desktop/ABM4bio-custom"
+# export ABM_BIN="${ABM4BIO_ROOT}/build/ABM4bio"
+
+# Optional: BioDynaMo install (defaults to $ABM4BIO_ROOT/libs/biodynamo-v1.05.143)
+# export BDMSYS="${ABM4BIO_ROOT}/libs/biodynamo-v1.05.143"

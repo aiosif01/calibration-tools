@@ -26,25 +26,6 @@ activate_python_env() {
   fi
 }
 
-resolve_abm_bin() {
-  local candidates=(
-    "${ABM_BIN:-}"
-    "${ROOT_DIR}/ABM4bio_${CELL_LINE}"
-    "${ROOT_DIR}/ABM4bio"
-    "${ROOT_DIR}/build/ABM4bio"
-    "/home/aiwsif/Desktop/ABM4bio/build/ABM4bio"
-  )
-  local candidate
-  for candidate in "${candidates[@]}"; do
-    if [[ -n "${candidate}" && -x "${candidate}" ]]; then
-      echo "${candidate}"
-      return 0
-    fi
-  done
-  echo ""
-  return 1
-}
-
 activate_python_env
 
 PYTHON_BIN="${PYTHON_BIN:-${ROOT_DIR}/.venv/bin/python}"
@@ -53,7 +34,13 @@ PYTHON_BIN="${PYTHON_BIN:-${ROOT_DIR}/.venv/bin/python}"
 MOCK_MODE="${MOCK_MODE:-0}"
 TARGET_MODE="${TARGET_MODE:-t0_normalized}"
 TIME_POINTS="${TIME_POINTS:-0,24,48,72}"
-TEMPLATE_PATH="${TEMPLATE_PATH:-${ROOT_DIR}/templates/input_mechanism12_CAP_template.csv}"
+if [[ "${EXPOSURE_SECONDS}" == "0" && "${SET_CAP_DURATION}" == "0" ]]; then
+  TEMPLATE_PATH="${TEMPLATE_PATH:-${ROOT_DIR}/templates/input_control_mechanism10_template.csv}"
+  CONTROL_MODE_ARGS=(--control-mode)
+else
+  TEMPLATE_PATH="${TEMPLATE_PATH:-${ROOT_DIR}/templates/input_mechanism12_CAP_template.csv}"
+  CONTROL_MODE_ARGS=()
+fi
 TARGETS_CSV="${TARGETS_CSV:-${ROOT_DIR}/data/calibration_targets_from_excel.csv}"
 OUT_DIR="${OUT_DIR:-${ROOT_DIR}/executables/${CELL_LINE}/outputs/${OUTPUT_LABEL}}"
 NORMALIZE_SIM_TO_T0="${NORMALIZE_SIM_TO_T0:-1}"
@@ -61,13 +48,26 @@ COPY_FILE="${COPY_FILE:-}"
 PARAMS="${PARAMS:-}"
 PARAMETER_KEYS="${PARAMETER_KEYS:-}"
 
+# Use latest calibrated control parameters when available (override with PARAMS=...).
+if [[ "${EXPOSURE_SECONDS}" == "0" && "${SET_CAP_DURATION}" == "0" && -z "${PARAMS}" && "${USE_CALIBRATED_PARAMS:-1}" == "1" ]]; then
+  CALIBRATED_CSV="${CALIBRATED_CSV:-${ROOT_DIR}/executables/${CELL_LINE}/outputs/calibration_control/calibrated_parameters.csv}"
+  if [[ -f "${CALIBRATED_CSV}" ]]; then
+    mapfile -t _calib_keys < <(awk -F',' 'NR>1 {print $1}' "${CALIBRATED_CSV}")
+    mapfile -t _calib_vals < <(awk -F',' 'NR>1 {print $2}' "${CALIBRATED_CSV}")
+    if [[ ${#_calib_keys[@]} -gt 0 ]]; then
+      PARAMETER_KEYS="$(IFS=,; echo "${_calib_keys[*]}")"
+      PARAMS="$(IFS=,; echo "${_calib_vals[*]}")"
+    fi
+  fi
+fi
+
 if [[ "${MOCK_MODE}" == "1" ]]; then
   RUN_COMMAND="${RUN_COMMAND:-make}"
 else
-  ABM_BIN="${ABM_BIN:-$(resolve_abm_bin || true)}"
-  if [[ -z "${ABM_BIN}" || ! -x "${ABM_BIN}" ]]; then
+  ABM_BIN="${ABM_BIN:-$(resolve_abm_bin "${CELL_LINE}" || true)}"
+  if [[ -z "${ABM_BIN}" || ! -f "${ABM_BIN}" || ! -x "${ABM_BIN}" ]]; then
     echo "Error: ABM executable not found for ${CELL_LINE}." >&2
-    echo "Set ABM_BIN or place the binary at /home/aiwsif/Desktop/ABM4bio/build/ABM4bio" >&2
+    abm_paths_hint
     exit 1
   fi
   RUN_COMMAND="${RUN_COMMAND:-${ABM_BIN} input.csv}"
@@ -83,6 +83,7 @@ ARGS=(
   --out-dir "${OUT_DIR}"
   --run-dir "${OUT_DIR}"
   --run-command "${RUN_COMMAND}"
+  "${CONTROL_MODE_ARGS[@]}"
 )
 
 if [[ -n "${COPY_FILE}" ]]; then
@@ -130,6 +131,10 @@ echo "  Curve plot: ${OUT_DIR}/simulation_preview.png"
 if [[ "${MOCK_MODE}" == "1" ]]; then
   echo "  ABM visualization: skipped (MOCK_MODE=1)"
 else
-  echo "  ABM visualization: ${OUT_DIR}/results_CAP_mech12/"
+  if [[ "${EXPOSURE_SECONDS}" == "0" ]]; then
+    echo "  ABM visualization: ${OUT_DIR}/results_control/"
+  else
+    echo "  ABM visualization: ${OUT_DIR}/results_CAP_mech12/"
+  fi
   echo "    Open the .pvd files in ParaView from that folder."
 fi

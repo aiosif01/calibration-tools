@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Sequence
-import numpy as np
+
 import matplotlib
 import matplotlib.pyplot as plt
+import numpy as np
+
+from .calibration_params import parameter_plot_color, parameter_plot_label
 
 
 class LiveCalibrationPlotter:
@@ -22,6 +25,9 @@ class LiveCalibrationPlotter:
         self.title = title
         self.parameter_names = list(parameter_names or [])
         self.history: list[dict] = []
+        self.stage_history: list[dict] = []
+        self._current_stage: str | None = None
+        self._stage_eval = 0
         self.fig = None
         self.axes = None
         if self.live:
@@ -35,6 +41,14 @@ class LiveCalibrationPlotter:
         if not self.live:
             matplotlib.use("Agg", force=True)
 
+    def _begin_stage(self, stage: str | None) -> None:
+        stage_key = stage or "fit"
+        if stage_key == self._current_stage:
+            return
+        self._current_stage = stage_key
+        self.stage_history = []
+        self._stage_eval = 0
+
     def update(
         self,
         *,
@@ -47,13 +61,19 @@ class LiveCalibrationPlotter:
         residuals: Sequence[float],
         stage: str | None = None,
     ) -> None:
+        self._begin_stage(stage)
+        self._stage_eval += 1
         params_arr = np.asarray(params, dtype=float)
-        row = {"eval": int(eval_id), "chi2": float(chi2)}
-        if stage:
-            row["stage"] = stage
+        row = {
+            "eval": int(eval_id),
+            "stage_eval": int(self._stage_eval),
+            "chi2": float(chi2),
+            "stage": self._current_stage,
+        }
         for i, p in enumerate(params_arr, start=1):
             row[f"p{i}"] = float(p)
         self.history.append(row)
+        self.stage_history.append(row)
 
         if self.fig is None or self.axes is None:
             self.fig, self.axes = plt.subplots(2, 2, figsize=(12, 8))
@@ -63,34 +83,42 @@ class LiveCalibrationPlotter:
         for ax in (ax0, ax1, ax2, ax3):
             ax.clear()
 
-        h = self.history
-        evals = [r["eval"] for r in h]
+        h = self.stage_history
+        evals = [r["stage_eval"] for r in h]
+        stage_title = self._current_stage or "current stage"
         for i in range(len(params_arr)):
-            label = self.parameter_names[i] if i < len(self.parameter_names) else f"p{i+1}"
-            short = label.split("/")[-1] if "/" in label else label
-            ax0.plot(evals, [r[f"p{i+1}"] for r in h], marker="o", label=short)
-        ax0.set_xlabel("Function evaluation")
+            key = self.parameter_names[i] if i < len(self.parameter_names) else f"p{i+1}"
+            label = parameter_plot_label(key) if i < len(self.parameter_names) else f"param {i+1}"
+            color = parameter_plot_color(key, i) if i < len(self.parameter_names) else None
+            ax0.plot(
+                evals,
+                [r[f"p{i+1}"] for r in h],
+                marker="o",
+                label=label,
+                color=color,
+            )
+        ax0.set_xlabel("Evaluation (this stage)")
         ax0.set_ylabel("Parameter value")
-        ax0.set_title("Parameter convergence")
-        ax0.legend()
+        ax0.set_title(f"Parameter convergence — {stage_title}")
+        ax0.legend(fontsize=8)
 
         ax1.semilogy(evals, [max(r["chi2"], 1e-30) for r in h], marker="o")
-        ax1.set_xlabel("Function evaluation")
+        ax1.set_xlabel("Evaluation (this stage)")
         ax1.set_ylabel("Weighted SSE")
-        ax1.set_title("Objective convergence")
+        ax1.set_title(f"Objective convergence — {stage_title}")
 
         ax2.plot(t, y_data, "o", label="Experimental target")
         ax2.plot(t, y_fit, "-", label="Simulation")
         ax2.set_xlabel("Time post-treatment [h]")
         ax2.set_ylabel("Target output")
-        ax2.set_title("Current fit")
+        ax2.set_title(f"Current fit — {stage_title}")
         ax2.legend()
 
         ax3.axhline(0.0, linewidth=1)
         ax3.plot(t, residuals, "o-")
         ax3.set_xlabel("Time post-treatment [h]")
-        ax3.set_ylabel("Weighted residual")
-        ax3.set_title("Residuals")
+        ax3.set_ylabel("Residual")
+        ax3.set_title(f"Residuals — {stage_title}")
 
         self.fig.tight_layout()
         self.fig.savefig(self.out_dir / "live_calibration_latest.png", dpi=180)
@@ -115,15 +143,52 @@ class LiveCalibrationPlotter:
         pd.DataFrame(self.history).to_csv(self.out_dir / f"{prefix}_trace.csv", index=False)
 
         hist = pd.DataFrame(self.history)
-        if not hist.empty:
+        if not hist.empty and "stage" in hist.columns:
+            stages = [s for s in hist["stage"].dropna().unique().tolist() if s]
+            if stages:
+                n_stages = len(stages)
+                fig, axes = plt.subplots(2, n_stages, figsize=(4.5 * n_stages, 8), squeeze=False)
+                for col, stage_name in enumerate(stages):
+                    stage_df = hist[hist["stage"] == stage_name]
+                    if stage_df.empty:
+                        continue
+                    xvals = stage_df["stage_eval"] if "stage_eval" in stage_df else stage_df["eval"]
+                    param_cols = [c for c in stage_df.columns if c.startswith("p")]
+                    for j, c in enumerate(param_cols):
+                        key = self.parameter_names[j] if j < len(self.parameter_names) else c
+                        label = parameter_plot_label(key) if j < len(self.parameter_names) else c
+                        color = parameter_plot_color(key, j) if j < len(self.parameter_names) else None
+                        axes[0, col].plot(
+                            xvals,
+                            stage_df[c],
+                            marker="o",
+                            label=label,
+                            color=color,
+                        )
+                    axes[0, col].set_title(stage_name)
+                    axes[0, col].legend(fontsize=7)
+                    axes[1, col].semilogy(xvals, stage_df["chi2"].clip(lower=1e-30), marker="o")
+                    axes[1, col].set_xlabel("Evaluation (stage)")
+                axes[0, 0].set_ylabel("Parameter value")
+                axes[1, 0].set_ylabel("Weighted SSE")
+                fig.suptitle("Convergence by calibration stage")
+                fig.tight_layout()
+                fig.savefig(self.out_dir / f"{prefix}A_convergence.pdf")
+                fig.savefig(self.out_dir / f"{prefix}A_convergence.png", dpi=180)
+                plt.close(fig)
+        elif not hist.empty:
             param_cols = [c for c in hist.columns if c.startswith("p")]
             fig, axes = plt.subplots(2, 1, figsize=(9, 8))
-            for c in param_cols:
-                axes[0].plot(hist["eval"], hist[c], marker="o", label=c)
+            xvals = hist["stage_eval"] if "stage_eval" in hist.columns else hist["eval"]
+            for j, c in enumerate(param_cols):
+                key = self.parameter_names[j] if j < len(self.parameter_names) else c
+                label = parameter_plot_label(key) if j < len(self.parameter_names) else c
+                color = parameter_plot_color(key, j) if j < len(self.parameter_names) else None
+                axes[0].plot(xvals, hist[c], marker="o", label=label, color=color)
             axes[0].set_ylabel("Parameter value")
             axes[0].set_title("Parameter convergence")
             axes[0].legend()
-            axes[1].semilogy(hist["eval"], hist["chi2"].clip(lower=1e-30), marker="o")
+            axes[1].semilogy(xvals, hist["chi2"].clip(lower=1e-30), marker="o")
             axes[1].set_xlabel("Function evaluation")
             axes[1].set_ylabel("Weighted SSE")
             axes[1].set_title("Objective convergence")

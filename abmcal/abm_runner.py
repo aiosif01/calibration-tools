@@ -13,6 +13,7 @@ import csv
 import numpy as np
 import pandas as pd
 
+from .early_stop import EarlyStopLimits, probe_stats_progress, should_kill_overgrowth, terminate_process_tree
 from .input_template import render_template
 from .stats_metrics import read_output_vector
 
@@ -38,9 +39,14 @@ class ABMRunConfig:
     remove_results_input_copy: bool = False
     strip_visualization_after_run: bool = False
     stream_stdout: bool = False
-    abm_base_seed: int = 1234
+    abm_base_seed: int | None = 1234
     abm_seed_step: int = 1
+    abm_use_seed: bool = True
     replicates: int = 1
+    early_stop_max_cells: int | None = None
+    early_stop_required_end_h: float = 72.0
+    early_stop_min_sim_hour_fraction: float = 0.15
+    early_stop_poll_interval_s: float = 0.25
 
 
 def run_abm_once(
@@ -104,34 +110,52 @@ def run_abm_once(
                 results_dir = run_dir / out_dir_name
                 if results_dir.exists():
                     shutil.rmtree(results_dir)
-        seed = int(config.abm_base_seed) + rep_index * int(config.abm_seed_step)
+        seed = None
+        if config.abm_use_seed and config.abm_base_seed is not None:
+            seed = int(config.abm_base_seed) + rep_index * int(config.abm_seed_step)
         command = _abm_command_with_seed(config.run_command, seed)
         log_path = run_dir / ("run.log" if n_reps == 1 else f"run_rep{rep_index:02d}.log")
+        early_limits = None
+        if config.early_stop_max_cells is not None:
+            early_limits = EarlyStopLimits(
+                max_cells=int(config.early_stop_max_cells),
+                required_end_h=float(config.early_stop_required_end_h),
+                min_sim_hour_fraction=float(config.early_stop_min_sim_hour_fraction),
+            )
+        stats_probe_path = run_dir / rendered_output_dir / Path(config.stats_file_relpath).name
+
+        early_stopped = False
         if config.stream_stdout:
-            print(f"\n>>> Starting ABM run: {run_name} (seed={seed})", flush=True)
-            returncode = _run_abm_streaming(
+            seed_label = "default" if seed is None else str(seed)
+            print(f"\n>>> Starting ABM run: {run_name} (seed={seed_label})", flush=True)
+            returncode, early_stopped = _run_abm_streaming(
                 command,
                 cwd=run_dir,
                 env=env,
                 log_path=log_path,
                 timeout_s=config.timeout_s,
+                stats_probe_path=stats_probe_path,
+                early_limits=early_limits,
+                poll_interval_s=config.early_stop_poll_interval_s,
             )
         else:
-            proc = subprocess.run(
+            returncode, early_stopped = _run_abm_with_optional_early_stop(
                 command,
                 cwd=run_dir,
-                shell=True,
                 env=env,
-                text=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                timeout=config.timeout_s,
+                log_path=log_path,
+                timeout_s=config.timeout_s,
+                stats_probe_path=stats_probe_path,
+                early_limits=early_limits,
+                poll_interval_s=config.early_stop_poll_interval_s,
             )
-            log_path.write_text(proc.stdout)
-            returncode = proc.returncode
 
-        if returncode != 0:
+        if returncode != 0 and not early_stopped:
             raise RuntimeError(f"ABM command failed with exit code {returncode}. See {log_path}")
+
+        if early_stopped:
+            replicate_vectors.append(overgrowth_penalty_vector(config.time_points))
+            continue
 
         stats_filename = Path(config.stats_file_relpath).name
         stats_path = run_dir / rendered_output_dir / stats_filename
@@ -162,14 +186,51 @@ def run_abm_once(
     return np.mean(np.vstack(replicate_vectors), axis=0)
 
 
-def _abm_command_with_seed(run_command: str, seed: int) -> str:
-    """Append ABM4bio RNG seed: `ABM4bio input.csv <seed>`."""
+def _abm_command_with_seed(run_command: str, seed: int | None) -> str:
+    """Append ABM4bio RNG seed when set (`ABM4bio input.csv <seed>`). MATLAB LM omits seed."""
     command = run_command.strip()
+    if seed is None:
+        return command
     if command.endswith("input.csv"):
         return f"{command} {int(seed)}"
     if "input.csv" in command and str(seed) not in command.split():
         return f"{command} {int(seed)}"
     return f"{command} {int(seed)}"
+
+
+def overgrowth_penalty_vector(time_points: Sequence[int], *, initial_cells: float = 100.0) -> np.ndarray:
+    """Objective penalty when a run is killed for exceeding the cell-count guardrail."""
+    return np.array(
+        [initial_cells if int(t) <= 0 else initial_cells * 10_000.0 for t in time_points],
+        dtype=float,
+    )
+
+
+def _check_early_stop(
+    proc: subprocess.Popen,
+    *,
+    stats_probe_path: Path,
+    early_limits: EarlyStopLimits | None,
+) -> bool:
+    if early_limits is None or proc.poll() is not None:
+        return False
+    progress = probe_stats_progress(stats_probe_path)
+    if progress is None:
+        return False
+    current_time_h, n_cells = progress
+    if should_kill_overgrowth(
+        current_time_h=current_time_h,
+        n_cells=n_cells,
+        limits=early_limits,
+    ):
+        print(
+            f"\n>>> Early stop: N_cells={n_cells} >> {early_limits.max_cells} "
+            f"at t={current_time_h:.1f}h",
+            flush=True,
+        )
+        terminate_process_tree(proc)
+        return True
+    return False
 
 
 def _run_abm_streaming(
@@ -179,8 +240,12 @@ def _run_abm_streaming(
     env: dict[str, str],
     log_path: Path,
     timeout_s: int | None,
-) -> int:
+    stats_probe_path: Path | None = None,
+    early_limits: EarlyStopLimits | None = None,
+    poll_interval_s: float = 0.25,
+) -> tuple[int, bool]:
     """Run ABM4bio while forwarding stdout live (supports \\r progress bars) and saving run.log."""
+    early_stopped = False
     proc = subprocess.Popen(
         command,
         cwd=cwd,
@@ -188,18 +253,33 @@ def _run_abm_streaming(
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
+        start_new_session=True,
     )
     assert proc.stdout is not None
     deadline = time.monotonic() + timeout_s if timeout_s is not None else None
+    last_probe = 0.0
     with log_path.open("wb") as log_f:
         while True:
             if deadline is not None and time.monotonic() > deadline:
-                proc.kill()
-                proc.wait()
+                terminate_process_tree(proc)
                 raise subprocess.TimeoutExpired(command, timeout_s)
+            now = time.monotonic()
+            if (
+                stats_probe_path is not None
+                and early_limits is not None
+                and now - last_probe >= poll_interval_s
+            ):
+                last_probe = now
+                if _check_early_stop(proc, stats_probe_path=stats_probe_path, early_limits=early_limits):
+                    early_stopped = True
+            if proc.poll() is not None:
+                break
             byte = proc.stdout.read(1)
             if not byte:
-                break
+                if proc.poll() is not None:
+                    break
+                time.sleep(min(poll_interval_s, 0.05))
+                continue
             try:
                 sys.stdout.buffer.write(byte)
                 sys.stdout.buffer.flush()
@@ -210,15 +290,86 @@ def _run_abm_streaming(
     proc.wait()
     if proc.returncode == 0:
         print(f">>> Finished ABM run ({log_path.parent.name})", flush=True)
-    return int(proc.returncode or 0)
+    elif early_stopped:
+        print(f">>> ABM run early-stopped ({log_path.parent.name})", flush=True)
+    return int(proc.returncode or 0), early_stopped
 
 
-def calibration_input_overrides(template_path: str | Path) -> dict[str, object]:
-    """Input overrides for calibration runs: disable VTK/PVD and cell-export output."""
-    return {
+def _run_abm_with_optional_early_stop(
+    command: str,
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    log_path: Path,
+    timeout_s: int | None,
+    stats_probe_path: Path | None,
+    early_limits: EarlyStopLimits | None,
+    poll_interval_s: float,
+) -> tuple[int, bool]:
+    if early_limits is None or stats_probe_path is None:
+        proc = subprocess.run(
+            command,
+            cwd=cwd,
+            shell=True,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=timeout_s,
+        )
+        log_path.write_text(proc.stdout)
+        return int(proc.returncode or 0), False
+
+    early_stopped = False
+    proc = subprocess.Popen(
+        command,
+        cwd=cwd,
+        shell=True,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        start_new_session=True,
+    )
+    deadline = time.monotonic() + timeout_s if timeout_s is not None else None
+    last_probe = 0.0
+    output_lines: list[str] = []
+    while proc.poll() is None:
+        if deadline is not None and time.monotonic() > deadline:
+            terminate_process_tree(proc)
+            raise subprocess.TimeoutExpired(command, timeout_s)
+        now = time.monotonic()
+        if now - last_probe >= poll_interval_s:
+            last_probe = now
+            if _check_early_stop(proc, stats_probe_path=stats_probe_path, early_limits=early_limits):
+                early_stopped = True
+        time.sleep(min(poll_interval_s, 0.05))
+    if proc.stdout is not None:
+        output_lines.append(proc.stdout.read() or "")
+    log_path.write_text("".join(output_lines))
+    return int(proc.returncode or 0), early_stopped
+
+
+def calibration_input_overrides(
+    template_path: str | Path,
+    *,
+    mechanism: int | None = None,
+) -> dict[str, object]:
+    """Input overrides for ABM runs: no VTK/PVD export; geometry depends on mechanism."""
+    from .calibration_config import MECHANISM_11
+    from .calibration_params import DOMAIN_2D_OVERRIDES
+
+    overrides: dict[str, object] = {
         "export_visualization": False,
         "cell_export/enabled": False,
+        "visualization_interval": 999_999,
     }
+    if mechanism == MECHANISM_11:
+        # MATLAB LM template: 2D polar dish, resolution stays in template (76).
+        overrides["simulation_domain_is_2D"] = True
+    else:
+        overrides.update(DOMAIN_2D_OVERRIDES)
+    return overrides
 
 
 def skip_visualization_exports(template_path: str | Path) -> dict[str, object]:

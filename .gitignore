@@ -1,3 +1,14 @@
+# Local machine paths (copy from scripts/abm_paths.local.sh.example)
+scripts/abm_paths.local.sh
+
+# ABM4bio is an external dependency — do not vendor it in this repo
+ABM4bio/
+bdm-abm4bio/
+
+# Python bytecode
+__pycache__/
+*.pyc
+
 # Prerequisites
 *.d
 
