@@ -1,0 +1,42 @@
+
+#ifndef VTKANALYZENIFTIIO_EXPORT_H
+#define VTKANALYZENIFTIIO_EXPORT_H
+
+#ifdef VTKANALYZENIFTIIO_STATIC_DEFINE
+#  define VTKANALYZENIFTIIO_EXPORT
+#  define VTKANALYZENIFTIIO_NO_EXPORT
+#else
+#  ifndef VTKANALYZENIFTIIO_EXPORT
+#    ifdef NIfTIIO_EXPORTS
+        /* We are building this library */
+#      define VTKANALYZENIFTIIO_EXPORT __attribute__((visibility("default")))
+#    else
+        /* We are using this library */
+#      define VTKANALYZENIFTIIO_EXPORT __attribute__((visibility("default")))
+#    endif
+#  endif
+
+#  ifndef VTKANALYZENIFTIIO_NO_EXPORT
+#    define VTKANALYZENIFTIIO_NO_EXPORT __attribute__((visibility("hidden")))
+#  endif
+#endif
+
+#ifndef VTKANALYZENIFTIIO_DEPRECATED
+#  define VTKANALYZENIFTIIO_DEPRECATED __attribute__ ((__deprecated__))
+#endif
+
+#ifndef VTKANALYZENIFTIIO_DEPRECATED_EXPORT
+#  define VTKANALYZENIFTIIO_DEPRECATED_EXPORT VTKANALYZENIFTIIO_EXPORT VTKANALYZENIFTIIO_DEPRECATED
+#endif
+
+#ifndef VTKANALYZENIFTIIO_DEPRECATED_NO_EXPORT
+#  define VTKANALYZENIFTIIO_DEPRECATED_NO_EXPORT VTKANALYZENIFTIIO_NO_EXPORT VTKANALYZENIFTIIO_DEPRECATED
+#endif
+
+#if 0 /* DEFINE_NO_DEPRECATED */
+#  ifndef VTKANALYZENIFTIIO_NO_DEPRECATED
+#    define VTKANALYZENIFTIIO_NO_DEPRECATED
+#  endif
+#endif
+
+#endif /* VTKANALYZENIFTIIO_EXPORT_H */

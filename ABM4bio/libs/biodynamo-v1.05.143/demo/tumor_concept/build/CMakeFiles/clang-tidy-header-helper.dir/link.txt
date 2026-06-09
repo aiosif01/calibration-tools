@@ -1,0 +1,1 @@
+/usr/bin/mpicxx  -Wall -Wno-missing-braces -fPIC -fopenmp -m64 -O3 -DNDEBUG CMakeFiles/clang-tidy-header-helper.dir/clang_tidy_header_helper.cc.o -o clang-tidy-header-helper   -L/usr/lib/gcc/x86_64-linux-gnu/11/libgomp.so 

@@ -1,0 +1,26 @@
+// -----------------------------------------------------------------------------
+//
+// Copyright (C) 2021 CERN & University of Surrey for the benefit of the
+// BioDynaMo collaboration. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+//
+// See the LICENSE file distributed with this work for details.
+// See the NOTICE file distributed with this work for additional information
+// regarding copyright ownership.
+//
+// -----------------------------------------------------------------------------
+
+#include "core/operation/reduction_op.h"
+#include "core/container/math_array.h"
+#include "core/operation/operation_registry.h"
+
+namespace bdm {
+
+BDM_REGISTER_TEMPLATE_OP(ReductionOp, int, "ReductionOpInt", kCpu);
+BDM_REGISTER_TEMPLATE_OP(ReductionOp, real_t, "ReductionOpDouble", kCpu);
+BDM_REGISTER_TEMPLATE_OP(ReductionOp, Real3, "ReductionOpReal3", kCpu);
+BDM_REGISTER_TEMPLATE_OP(ReductionOp, Real4, "ReductionOpReal4", kCpu);
+
+}  // namespace bdm

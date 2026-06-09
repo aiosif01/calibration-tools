@@ -1,0 +1,351 @@
+# -----------------------------------------------------------------------------
+#
+# Copyright (C) 2021 CERN & University of Surrey for the benefit of the
+# BioDynaMo collaboration. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+#
+# See the LICENSE file distributed with this work for details.
+# See the NOTICE file distributed with this work for additional information
+# regarding copyright ownership.
+#
+# -----------------------------------------------------------------------------
+# This file contains the build setup for simulation projects outside the
+# biodynamo repository
+# Usage:
+#   find_package(BioDynaMo REQUIRED)
+#   include(${BDM_USE_FILE})
+#   bdm_add_executable(...)
+# -----------------------------------------------------------------------------
+
+set(policy_new CMP0072 CMP0057 CMP0077)
+foreach(policy ${policy_new})
+  if(POLICY ${policy})
+    cmake_policy(SET ${policy} NEW)
+  endif()
+endforeach()
+
+# Add our CMake files (e.g. FindXXX.cmake files) to the module path, so that out
+# of source build can find them
+get_filename_component(CMAKE_DIR ${BDM_USE_FILE} DIRECTORY)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_DIR})
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "$ENV{BDMSYS}/biodynamo/cmake/")
+
+# Add utils and other methods needed
+include(utils)
+
+# Option set when biodynamo was built
+SET(cuda_default OFF)
+SET(opencl_default OFF)
+SET(dict_default ON)
+SET(numa_default ON)
+SET(sbml_default OFF)
+SET(vtune_default OFF)
+SET(tcmalloc_default OFF)
+SET(jemalloc_default OFF)
+SET(test_default ON)
+SET(real_t OFF)
+
+# Options. Turn on with 'cmake -Dmyvarname=ON'.
+option(cuda      "Enable CUDA code generation for GPU acceleration" OFF)
+option(opencl    "Enable OpenCL code generation for GPU acceleration" OFF)
+option(dict      "Build with ROOT dictionaries" ON)
+option(numa      "Enable Numa support" ON)
+option(sbml      "Enable SBML support" OFF)
+option(vtune     "Enable VTune performance analysis" OFF)
+option(tcmalloc  "Use tcmalloc." OFF)
+option(jemalloc  "Use jemalloc." OFF)
+option(test      "Build all tests for your simulation." ON)
+
+if (cuda AND NOT cuda_default)
+    MESSAGE(FATAL_ERROR "One of the option which you provided (-Dcuda=${cuda}) is not compatible with \
+BioDynaMo. BioDynaMo was built by setting -Dcuda to ${cuda_default}. Please change -Dcuda to -Dcuda=${cuda_default}.")
+endif()
+if (opencl AND NOT opencl_default)
+    MESSAGE(FATAL_ERROR "One of the option which you provided (-Dopencl=${opencl}) is not compatible with \
+BioDynaMo. BioDynaMo was built by setting -Dopencl to ${opencl_default}. Please change -Dopencl to -Dopencl=${opencl_default}.")
+endif()
+if (dict AND NOT dict_default)
+    MESSAGE(FATAL_ERROR "One of the option which you provided (-Ddict=${dict}) is not compatible with \
+BioDynaMo. BioDynaMo was built by setting -Ddict to ${dict_default}. Please change -Ddict to -Ddict=${dict_default}.")
+endif()
+if (numa AND NOT numa_default)
+    MESSAGE(FATAL_ERROR "One of the option which you provided (-Dnuma=${numa}) is not compatible with \
+BioDynaMo. BioDynaMo was built by setting -Dnuma to ${numa_default}. Please change -Dnuma to -Dnuma=${numa_default}.")
+endif()
+if (sbml AND NOT sbml_default)
+    MESSAGE(FATAL_ERROR "One of the option which you provided (-Dsbml=${sbml}) is not compatible with \
+BioDynaMo. BioDynaMo was built by setting -Dsbml to ${sbml_default}. Please use -Dsbml=${sbml_default}.")
+endif()
+if (vtune AND NOT vtune_default)
+    MESSAGE(FATAL_ERROR "One of the option which you provided (-Dvtune=${vtune}) is not compatible with \
+BioDynaMo. BioDynaMo was built by setting -Dvtune to ${vtune_default}. Please change -Dvtune to -Dvtune=${vtune_default}.")
+endif()
+string(TOLOWER "${tcmalloc}" tcmalloc_lower )
+string(TOLOWER "${tcmalloc_default}" tcmalloc_default_lower )
+if (NOT "${tcmalloc_lower}" STREQUAL "${tcmalloc_default_lower}")
+    MESSAGE(FATAL_ERROR "One of the option which you provided (-Dtcmalloc=${tcmalloc}) is not compatible with \
+BioDynaMo. BioDynaMo was built by setting -Dtcmalloc to ${tcmalloc_default}. Please change -Dtcmalloc to -Dtcmalloc=${tcmalloc_default}.")
+endif()
+string(TOLOWER "${jemalloc}" jemalloc_lower )
+string(TOLOWER "${jemalloc_default}" jemalloc_default_lower )
+if (NOT "${jemalloc_lower}" STREQUAL "${jemalloc_default_lower}")
+    MESSAGE(FATAL_ERROR "One of the option which you provided (-Djemalloc=${jemalloc}) is not compatible with \
+BioDynaMo. BioDynaMo was built by setting -Djemalloc to ${jemalloc_default}. Please change -Djemalloc to -Djemalloc=${jemalloc_default}.")
+endif()
+
+# This file contains the build setup for simulation projects outside the
+# biodynamo repository
+# Usage:
+#   find_package(BioDynaMo REQUIRED)
+#   include(${BDM_USE_FILE})
+#   bdm_add_executable(...)
+
+if(UNIX AND NOT APPLE)
+  set(LINUX TRUE)
+endif()
+
+set(BDM_OUT_OF_SOURCE true)
+
+if(real_t)
+  message(STATUS "BioDynaMo real_t set to: ${real_t}")
+  add_definitions("-DBDM_REALT=${real_t}")
+else()
+  message(STATUS "Using default BioDynaMo real_t (double)")
+endif()
+
+if(DEFINED ENV{BDMSYS})
+    set(BDMSYS $ENV{BDMSYS})
+    add_definitions(-DBDMSYS=\"$ENV{BDMSYS}\")
+else()
+  execute_process(COMMAND rm -rf ${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles)
+  message(FATAL_ERROR "The BioDynaMo environment is not set up correctly. Please execute 'source <path-to-bdm-installation>/bin/thisbdm.sh' and retry this command.")
+endif()
+
+# -------------------- find packages ------------------------------------------
+if (tcmalloc)
+  find_package(tcmalloc)
+  if(NOT TCMALLOC_FOUND)
+    message(FATAL_ERROR "TCMalloc not found.")
+  endif()
+  message("Tcmalloc library found: ${TCMALLOC_LIBRARY_PATH}")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -ltcmalloc -L ${TCMALLOC_LIBRARY_PATH}")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -ltcmalloc -L ${TCMALLOC_LIBRARY_PATH}")
+endif()
+if (jemalloc)
+  find_package(jemalloc)
+  if(NOT JEMALLOC_FOUND)
+    message(FATAL_ERROR "jemalloc not found.")
+  endif()
+  message("jemalloc library found: ${JEMALLOC_LIBRARY_DIR}")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -ljemalloc -L ${JEMALLOC_LIBRARY_DIR}")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -ljemalloc -L ${JEMALLOC_LIBRARY_DIR}")
+endif()
+
+# In order to correctly compile and link the multi simulation manager with MPI,
+# you need to set CMAKE_[CXX|C]_COMPILER to [mpic++|mpicc]
+# We still however need to explicitly add the mpi.h include path to our include_directories
+# because rootcling will complain about missing mpi.h
+find_package(MPI COMPONENTS CXX)
+if(MPI_FOUND)
+  set(CMAKE_CXX_COMPILER ${MPI_CXX_COMPILER})
+  include_directories(${MPI_CXX_COMPILER_INCLUDE_DIRS})
+  add_definitions("-DUSE_MPI")
+else(MPI_FOUND)
+  MESSAGE(FATAL_ERROR "We did not find any OpenMPI installation. Please run ./prerequisites.sh again before
+  calling cmake. The OpenMPI library is required in order to successfully use BioDynaMo." )
+endif(MPI_FOUND)
+
+if(APPLE)
+  find_program(BREW_BIN brew)
+  execute_process(COMMAND ${BREW_BIN} --prefix
+                      OUTPUT_VARIABLE BREW_PREFIX
+                      OUTPUT_STRIP_TRAILING_WHITESPACE)
+  # After migrating to libomp 15.0.3, libomp does no longer symlink into 
+  # $(brew --prefix)/opt/lib/libomp.dylib. Instead, it is located in 
+  # $(brew --prefix)/opt/libomp/.. . This fix should work across all platforms.
+  # find_package(OpenMP) can be guieded with OpenMP_<lang>_INCLUDE_DIR.
+  set(OpenMP_C_INCLUDE_DIR "${BREW_PREFIX}/opt/libomp/include")
+  set(OpenMP_CXX_INCLUDE_DIR "${BREW_PREFIX}/opt/libomp/include")
+endif(APPLE)
+
+find_package(OpenMP REQUIRED)
+
+if (OpenMP_CXX_FOUND)
+  get_filename_component(OpenMP_CXX_LIB_DIR "${OpenMP_CXX_LIBRARIES}" DIRECTORY)
+  link_directories(${OpenMP_CXX_LIB_DIR})
+  set(BDM_REQUIRED_LIBRARIES ${BDM_REQUIRED_LIBRARIES} OpenMP::OpenMP_CXX)
+endif()
+
+find_package(Git)
+
+if(cuda)
+  find_package(CUDA)
+endif()
+
+if(opencl)
+  find_package(OpenCL)
+endif()
+
+if(numa)
+  find_package(Numa REQUIRED)
+  if (NUMA_FOUND)
+    include_directories(${NUMA_INCLUDE_DIR})
+    link_directories(${NUMA_LIBRARY_DIR})
+    add_definitions("-DUSE_NUMA")
+    set(BDM_REQUIRED_LIBRARIES ${BDM_REQUIRED_LIBRARIES} ${NUMA_LIBRARY})
+  endif()
+endif()
+
+find_package(ROOT REQUIRED COMPONENTS Geom Gui Eve GenVector)
+verify_root()
+if (dict)
+  add_definitions("-DUSE_DICT")
+endif()
+
+if (vtune)
+    find_package(VTune)
+    if(${VTune_FOUND})
+        include_directories(${VTUNE_INCLUDE_DIR})
+        add_definitions("-DUSE_VTUNE")
+        set(BDM_REQUIRED_LIBRARIES ${BDM_REQUIRED_LIBRARIES} ${VTUNE_LIBRARIES})
+    else()
+        message(WARNING "VTune not found")
+        SET(vtune OFF)
+    endif()
+endif()
+
+if(sbml)
+  if(APPLE)
+    message(FATAL_ERROR "Currently SBML is not supported on MacOS (see https://trello.com/c/vKPbh4iG).")
+  endif()
+  find_package(Libroadrunner REQUIRED)
+  add_definitions(${Libroadrunner_DEFINITIONS})
+  include_directories(${Libroadrunner_INCLUDE_DIRS})
+  link_directories(${Libroadrunner_LINK_DIRS})
+  set(BDM_REQUIRED_LIBRARIES ${BDM_REQUIRED_LIBRARIES} ${Libroadrunner_LINK_LIBRARIES})
+endif()
+
+# Link to OpenCL
+if (OPENCL_FOUND)
+  if (OPENCL_HAS_CXX OR APPLE)
+    add_definitions("-DUSE_OPENCL")
+    set(BDM_REQUIRED_LIBRARIES ${BDM_REQUIRED_LIBRARIES} ${OPENCL_LIBRARIES})
+  else()
+    message(WARNING "OpenCL C++ bindings not found. Please install to make use of OpenCL. "
+      "If you think you have installed the C++ bindings correctly, please check if one "
+      "of the following environmentals is set correctly (vendor specific):
+      - AMD: \t\tAMDAPPSDKROOT
+      - NVIDIA: \tCUDA_PATH
+      - INTEL: \tINTELOPENCLSDK")
+    set(OPENCL_FOUND FALSE)
+  endif()
+endif()
+
+if (CUDA_FOUND)
+  add_definitions("-DUSE_CUDA")
+  include_directories(${CUDA_INCLUDE_DIRS} ${CUDA_TOOLKIT_ROOT_DIR})
+  set(BDM_REQUIRED_LIBRARIES ${BDM_REQUIRED_LIBRARIES} ${CUDA_LIBRARIES})
+  set(BDM_REQUIRED_LIBRARIES ${BDM_REQUIRED_LIBRARIES} bdmcuda)
+endif()
+
+find_package(ClangTools)
+if (NOT ClangTools_FOUND)
+    message(WARNING "clang-tidy and clang-format were not found. Style checks will not be available for this simulation.")
+else()
+    if ("$ENV{CMAKE_EXPORT_COMPILE_COMMANDS}" STREQUAL "1" OR CLANG_TIDY_FOUND)
+      # Generate a Clang compile_commands.json "compilation database" file for use
+      # with various development tools, such as Vim's YouCompleteMe plugin.
+      # See http://clang.llvm.org/docs/JSONCompilationDatabase.html
+      set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
+    endif()
+    # It is used by format/style checks. It needs to be defined here such
+    # to enable relocation of the scripts.
+    set(BUILD_SUPPORT_DIR "${BDMSYS}/share/util")
+    include(CppStyleGuideChecks)
+endif()
+
+# If not set, sgemm_ is not found on macos
+if(APPLE)
+  set(BLA_VENDOR Apple)
+else()
+  set(BLA_VENDOR Generic)
+endif()
+
+find_package(BLAS)
+if (NOT BLAS_FOUND)
+    message(WARNING "BLAS not found.")
+else()
+  set(BDM_REQUIRED_LIBRARIES ${BDM_REQUIRED_LIBRARIES} ${BLAS_LIBRARIES})
+endif()
+
+find_package(LAPACK)
+if (NOT LAPACK_FOUND)
+    message(WARNING "LAPACK not found.")
+else()
+  set(BDM_REQUIRED_LIBRARIES ${BDM_REQUIRED_LIBRARIES} ${LAPACK_LIBRARIES})
+endif()
+
+# -------------------- set default build type and compiler flags ---------------
+if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+include("${BDMSYS}/share/cmake/SetCompilerFlags.cmake")
+
+# -------------- function to compile tests in derived work ---------------------
+function(bdm_add_test TARGET)
+  # Parse arguments from function call
+  cmake_parse_arguments(ARG "" "" "SOURCES;HEADERS;LIBRARIES" ${ARGN} )
+
+  if (NOT test OR NOT test_default)
+    MESSAGE(NOTICE "<bdm_add_test>: No tests will be built. Testing (-Dtest) " 
+                    "must be enabled in BioDynamo and in your project. \n "
+                    "Your Configuration:")
+    MESSAGE(NOTICE "   BioDynamo was built with -Dtest=${test_default}.")
+    MESSAGE(NOTICE "   Your project ${CMAKE_PROJECT_NAME} was built with "
+                   "-Dtest=${test}.")
+  else()
+    # Create a libgtest target to be used as a dependency by test program
+    add_library(libgtest IMPORTED STATIC GLOBAL)
+    add_dependencies(libgtest gtest_main)
+    set_target_properties(libgtest PROPERTIES
+        IMPORTED_LOCATION "$ENV{BDMSYS}/lib/libgtest.a"
+        IMPORTED_LINK_INTERFACE_LIBRARIES "${CMAKE_THREAD_LIBS_INIT}"
+    )
+    # If there are no headers, we use a simplified build procedure. If there are 
+    # headers present, we use `bdm_add_executable` using a more sophisticated
+    # build procedure via shared libararies.
+    if("${ARG_HEADERS}" STREQUAL "")
+      add_executable(${TARGET} ${ARG_SOURCES})
+      target_link_libraries(${TARGET} ${ARG_LIBRARIES}  libgtest)
+      gtest_discover_tests(${TARGET})
+    else()
+      bdm_add_executable(${TARGET}
+                        SOURCES ${ARG_SOURCES}
+                        HEADERS ${ARG_HEADERS}
+                         LIBRARIES biodynamo libgtest ${ARG_LIBRARIES})
+      gtest_discover_tests(${TARGET}-bin)
+    endif("${ARG_HEADERS}" STREQUAL "")
+  endif(NOT test OR NOT test_default)
+endfunction(bdm_add_test)
+
+# -------------------- includes -----------------------------------------------
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${BDMSYS}/share/cmake")
+include("${BDMSYS}/share/cmake/BioDynaMo.cmake")
+include(${ROOT_USE_FILE})
+
+fix_rootcling_omp_issue()
+fix_macos_opencl_header_issue()
+
+list(REMOVE_ITEM ROOT_LIBRARIES "$ENV{BDMSYS}/third_party/root/lib/libEve.so")
+set(BDM_REQUIRED_LIBRARIES ${BDM_REQUIRED_LIBRARIES} biodynamo ${ROOT_LIBRARIES})
+
+include_directories("$ENV{BDMSYS}/include")
+# armadillo is added as a subdirectory in optimlib
+include_directories("$ENV{BDMSYS}/include/optim")
+link_directories("$ENV{BDMSYS}/lib")
+
+# -------------------- Instructions for GoogleTest -----------------------------
+enable_testing()
+include(GoogleTest)

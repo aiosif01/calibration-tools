@@ -1,0 +1,173 @@
+// -----------------------------------------------------------------------------
+//
+// Copyright (C) 2021 CERN & University of Surrey for the benefit of the
+// BioDynaMo collaboration. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+//
+// See the LICENSE file distributed with this work for details.
+// See the NOTICE file distributed with this work for additional information
+// regarding copyright ownership.
+//
+// -----------------------------------------------------------------------------
+
+#ifndef CORE_SUBSTANCE_INITIALIZERS_H_
+#define CORE_SUBSTANCE_INITIALIZERS_H_
+
+#include <stdexcept>
+#include <vector>
+
+#include "Math/DistFunc.h"
+
+#include "core/diffusion/diffusion_grid.h"
+
+namespace bdm {
+
+// -----------------------------------------------------------------------------
+// A substance initializer is a function that can be used to initialize the
+// concentration values of a particular substance in space.
+// -----------------------------------------------------------------------------
+
+// Use this enum to express the axis you are interested in
+enum Axis { kXAxis, kYAxis, kZAxis };
+
+/// An initializer that uniformly initializes the concentration of a diffusion
+/// grid based on the input value and the range (along the specified axis).
+class Uniform {
+ public:
+  Uniform(real_t min, real_t max, real_t value, uint8_t axis) {
+    min_ = min;
+    max_ = max;
+    value_ = value;
+    axis_ = axis;
+  }
+
+  real_t operator()(real_t x, real_t y, real_t z) {
+    switch (axis_) {
+      case Axis::kXAxis: {
+        if (x >= min_ && x <= max_) {
+          return value_;
+        }
+        break;
+      }
+      case Axis::kYAxis: {
+        if (y >= min_ && y <= max_) {
+          return value_;
+        }
+        break;
+      }
+      case Axis::kZAxis: {
+        if (z >= min_ && z <= max_) {
+          return value_;
+        }
+        break;
+      }
+      default:
+        throw std::logic_error("You have chosen an non-existing axis!");
+    }
+    return 0;
+  }
+
+ private:
+  real_t min_;
+  real_t max_;
+  real_t value_;
+  uint8_t axis_;
+};
+
+/// An initializer that follows a Gaussian (normal) distribution along one axis
+/// We use ROOT's built-in statistics function `normal_pdf(X, sigma, mean)`,
+/// that follows the normal probability density function:
+/// ( 1/( sigma * sqrt(2*pi) ))*e^( (-(x - mean )^2) / (2*sigma^2))
+class GaussianBand {
+ public:
+  /// @brief      The constructor
+  ///
+  /// @param[in]  mean   The mean of the Gaussian distribution (should be a
+  ///                    value within the range of the chosen axis)
+  /// @param[in]  sigma  The sigma of the Gaussian distribution
+  /// @param[in]  axis   The axis along which you want the Gaussian distribution
+  ///                    to be oriented to
+  /// @param[in]  scaling The scaling factor
+  ///
+  GaussianBand(real_t mean, real_t sigma, uint8_t axis, real_t scaling = 1.0) {
+    mean_ = mean;
+    sigma_ = sigma;
+    axis_ = axis;
+    scaling_ = scaling;
+  }
+
+  /// @brief      The model that we want to apply for substance initialization.
+  ///             The operator is called for the entire space
+  ///
+  /// @param[in]  x     The x coordinate
+  /// @param[in]  y     The y coordinate
+  /// @param[in]  z     The z coordinate
+  ///
+  real_t operator()(real_t x, real_t y, real_t z) {
+    switch (axis_) {
+      case Axis::kXAxis:
+        return scaling_ * ROOT::Math::normal_pdf(x, sigma_, mean_);
+      case Axis::kYAxis:
+        return scaling_ * ROOT::Math::normal_pdf(y, sigma_, mean_);
+      case Axis::kZAxis: {
+        return scaling_ * ROOT::Math::normal_pdf(z, sigma_, mean_);
+      }
+      default:
+        throw std::logic_error("You have chosen an non-existing axis!");
+    }
+  }
+
+ private:
+  real_t scaling_;
+  real_t mean_;
+  real_t sigma_;
+  uint8_t axis_;
+};
+
+/// An initializer that follows a Poisson (normal) distribution along one axis
+/// The function ROOT::Math::poisson_pdfd(X, lambda) follows the normal
+/// probability density function:
+/// {e^( - lambda ) * lambda ^x )} / x!
+class PoissonBand {
+ public:
+  /// @brief      The constructor
+  ///
+  /// @param[in]  lambda The lambda of the Poisson distribution
+  /// @param[in]  axis   The axis along which you want the Poisson distribution
+  ///                    to be oriented to
+  ///
+  PoissonBand(real_t lambda, uint8_t axis) {
+    lambda_ = lambda;
+    axis_ = axis;
+  }
+
+  /// @brief      The model that we want to apply for substance initialization.
+  ///             The operator is called for the entire space
+  ///
+  /// @param[in]  x     The x coordinate
+  /// @param[in]  y     The y coordinate
+  /// @param[in]  z     The z coordinate
+  ///
+  real_t operator()(real_t x, real_t y, real_t z) {
+    switch (axis_) {
+      case Axis::kXAxis:
+        return ROOT::Math::poisson_pdf(x, lambda_);
+      case Axis::kYAxis:
+        return ROOT::Math::poisson_pdf(y, lambda_);
+      case Axis::kZAxis:
+        return ROOT::Math::poisson_pdf(z, lambda_);
+      default:
+        throw std::logic_error("You have chosen an non-existing axis!");
+    }
+  }
+
+ private:
+  real_t lambda_;
+  uint8_t axis_;
+};
+
+}  // namespace bdm
+
+#endif  // CORE_SUBSTANCE_INITIALIZERS_H_

@@ -1,0 +1,42 @@
+
+#ifndef VTKMOOSEXFEMCLIP_EXPORT_H
+#define VTKMOOSEXFEMCLIP_EXPORT_H
+
+#ifdef VTKMOOSEXFEMCLIP_STATIC_DEFINE
+#  define VTKMOOSEXFEMCLIP_EXPORT
+#  define VTKMOOSEXFEMCLIP_NO_EXPORT
+#else
+#  ifndef VTKMOOSEXFEMCLIP_EXPORT
+#    ifdef vtkMooseXfemClip_EXPORTS
+        /* We are building this library */
+#      define VTKMOOSEXFEMCLIP_EXPORT __attribute__((visibility("default")))
+#    else
+        /* We are using this library */
+#      define VTKMOOSEXFEMCLIP_EXPORT __attribute__((visibility("default")))
+#    endif
+#  endif
+
+#  ifndef VTKMOOSEXFEMCLIP_NO_EXPORT
+#    define VTKMOOSEXFEMCLIP_NO_EXPORT __attribute__((visibility("hidden")))
+#  endif
+#endif
+
+#ifndef VTKMOOSEXFEMCLIP_DEPRECATED
+#  define VTKMOOSEXFEMCLIP_DEPRECATED __attribute__ ((__deprecated__))
+#endif
+
+#ifndef VTKMOOSEXFEMCLIP_DEPRECATED_EXPORT
+#  define VTKMOOSEXFEMCLIP_DEPRECATED_EXPORT VTKMOOSEXFEMCLIP_EXPORT VTKMOOSEXFEMCLIP_DEPRECATED
+#endif
+
+#ifndef VTKMOOSEXFEMCLIP_DEPRECATED_NO_EXPORT
+#  define VTKMOOSEXFEMCLIP_DEPRECATED_NO_EXPORT VTKMOOSEXFEMCLIP_NO_EXPORT VTKMOOSEXFEMCLIP_DEPRECATED
+#endif
+
+#if 0 /* DEFINE_NO_DEPRECATED */
+#  ifndef VTKMOOSEXFEMCLIP_NO_DEPRECATED
+#    define VTKMOOSEXFEMCLIP_NO_DEPRECATED
+#  endif
+#endif
+
+#endif /* VTKMOOSEXFEMCLIP_EXPORT_H */

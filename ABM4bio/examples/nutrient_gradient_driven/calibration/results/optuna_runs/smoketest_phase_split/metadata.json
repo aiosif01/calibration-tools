@@ -1,0 +1,33 @@
+{
+  "run_id": "smoketest_phase_split",
+  "condition": "ISO10",
+  "seed": 1234,
+  "parameters": {
+    "initial_necrotic_cells": 5,
+    "phase_G1_h": 10.0,
+    "phase_S_h": 6.5,
+    "phase_G2_h": 3.0,
+    "nutrient_vmax": 0.018,
+    "cell_grow_probability": 0.65,
+    "cell_divide_probability": 0.4,
+    "gluc_transform_prob": 0.3,
+    "necrosis_transform_probability": 0.35,
+    "proliferation_threshold": 0.3,
+    "necrosis_threshold": 0.1,
+    "quiescence_threshold": 0.2
+  },
+  "n0_cells": 74,
+  "n0_total_cells": 79,
+  "n0_necrotic_cells": 5,
+  "sphere_radius_um": 100.60376355943006,
+  "t0_shell_area_um2": 31796.427574598863,
+  "simulation_duration_h": 48.0,
+  "time_step_h": 0.1,
+  "domain_min_um": -600.0,
+  "domain_max_um": 600.0,
+  "pixel_scale_um_per_px": 1.21079857960497,
+  "executable": "/home/aiwsif/Desktop/ABM4bio/build/ABM4bio",
+  "run_status": "pending",
+  "abm4bio_commit": "7213fa6",
+  "timestamp": "2026-06-08T16:03:22"
+}

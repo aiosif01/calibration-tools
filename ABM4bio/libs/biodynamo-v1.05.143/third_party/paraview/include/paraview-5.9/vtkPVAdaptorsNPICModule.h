@@ -1,0 +1,42 @@
+
+#ifndef VTKPVADAPTORSNPIC_EXPORT_H
+#define VTKPVADAPTORSNPIC_EXPORT_H
+
+#ifdef VTKPVADAPTORSNPIC_STATIC_DEFINE
+#  define VTKPVADAPTORSNPIC_EXPORT
+#  define VTKPVADAPTORSNPIC_NO_EXPORT
+#else
+#  ifndef VTKPVADAPTORSNPIC_EXPORT
+#    ifdef AdaptorsNPIC_EXPORTS
+        /* We are building this library */
+#      define VTKPVADAPTORSNPIC_EXPORT __attribute__((visibility("default")))
+#    else
+        /* We are using this library */
+#      define VTKPVADAPTORSNPIC_EXPORT __attribute__((visibility("default")))
+#    endif
+#  endif
+
+#  ifndef VTKPVADAPTORSNPIC_NO_EXPORT
+#    define VTKPVADAPTORSNPIC_NO_EXPORT __attribute__((visibility("hidden")))
+#  endif
+#endif
+
+#ifndef VTKPVADAPTORSNPIC_DEPRECATED
+#  define VTKPVADAPTORSNPIC_DEPRECATED __attribute__ ((__deprecated__))
+#endif
+
+#ifndef VTKPVADAPTORSNPIC_DEPRECATED_EXPORT
+#  define VTKPVADAPTORSNPIC_DEPRECATED_EXPORT VTKPVADAPTORSNPIC_EXPORT VTKPVADAPTORSNPIC_DEPRECATED
+#endif
+
+#ifndef VTKPVADAPTORSNPIC_DEPRECATED_NO_EXPORT
+#  define VTKPVADAPTORSNPIC_DEPRECATED_NO_EXPORT VTKPVADAPTORSNPIC_NO_EXPORT VTKPVADAPTORSNPIC_DEPRECATED
+#endif
+
+#if 0 /* DEFINE_NO_DEPRECATED */
+#  ifndef VTKPVADAPTORSNPIC_NO_DEPRECATED
+#    define VTKPVADAPTORSNPIC_NO_DEPRECATED
+#  endif
+#endif
+
+#endif /* VTKPVADAPTORSNPIC_EXPORT_H */

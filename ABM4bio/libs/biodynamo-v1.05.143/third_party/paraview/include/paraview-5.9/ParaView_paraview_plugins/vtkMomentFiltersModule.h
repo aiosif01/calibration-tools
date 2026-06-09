@@ -1,0 +1,42 @@
+
+#ifndef VTKMOMENTFILTERS_EXPORT_H
+#define VTKMOMENTFILTERS_EXPORT_H
+
+#ifdef VTKMOMENTFILTERS_STATIC_DEFINE
+#  define VTKMOMENTFILTERS_EXPORT
+#  define VTKMOMENTFILTERS_NO_EXPORT
+#else
+#  ifndef VTKMOMENTFILTERS_EXPORT
+#    ifdef MomentFilters_EXPORTS
+        /* We are building this library */
+#      define VTKMOMENTFILTERS_EXPORT __attribute__((visibility("default")))
+#    else
+        /* We are using this library */
+#      define VTKMOMENTFILTERS_EXPORT __attribute__((visibility("default")))
+#    endif
+#  endif
+
+#  ifndef VTKMOMENTFILTERS_NO_EXPORT
+#    define VTKMOMENTFILTERS_NO_EXPORT __attribute__((visibility("hidden")))
+#  endif
+#endif
+
+#ifndef VTKMOMENTFILTERS_DEPRECATED
+#  define VTKMOMENTFILTERS_DEPRECATED __attribute__ ((__deprecated__))
+#endif
+
+#ifndef VTKMOMENTFILTERS_DEPRECATED_EXPORT
+#  define VTKMOMENTFILTERS_DEPRECATED_EXPORT VTKMOMENTFILTERS_EXPORT VTKMOMENTFILTERS_DEPRECATED
+#endif
+
+#ifndef VTKMOMENTFILTERS_DEPRECATED_NO_EXPORT
+#  define VTKMOMENTFILTERS_DEPRECATED_NO_EXPORT VTKMOMENTFILTERS_NO_EXPORT VTKMOMENTFILTERS_DEPRECATED
+#endif
+
+#if 0 /* DEFINE_NO_DEPRECATED */
+#  ifndef VTKMOMENTFILTERS_NO_DEPRECATED
+#    define VTKMOMENTFILTERS_NO_DEPRECATED
+#  endif
+#endif
+
+#endif /* VTKMOMENTFILTERS_EXPORT_H */

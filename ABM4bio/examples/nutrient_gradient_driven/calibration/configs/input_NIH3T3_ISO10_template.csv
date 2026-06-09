@@ -1,0 +1,154 @@
+parameter_name,type,parameter_value
+### START,###,###
+output_directory,string,PLACEHOLDER_OUTPUT_DIR
+simulation_title,string,NIH3T3_ISO10
+#,#,#
+number_of_time_steps,int,480
+time_step,float,0.1
+statistics_interval,int,10
+visualization_interval,int,120
+#,#,#
+# Domain: large enough that spheroid (r~200um at 48h) never touches boundary
+min_boundary,float,-600.0
+max_boundary,float,+600.0
+domain_tolerance,float,2.0
+migration_tolerance,float,0.05
+safe_distance_ratio,float,0.20
+simulation_domain_is_2D,bool,true
+simulation_domain_is_polar,bool,false
+simulation_domain_is_bounded,bool,true
+simulation_domain_is_periodic,bool,false
+simulation_models_vessels,bool,false
+simulation_obstacles,int,0
+#,#,#
+# Cell export at experimental time points (0, 12, 24, 36, 48 h)
+cell_export/enabled,bool,true
+cell_export/times_h,string,0.0 12.0 24.0 36.0 48.0
+#,#,#
+cell/phenotypes,string,necrotic_cell normoxic_cell
+cell/max_displacement,float,0.2
+diffusion_grid/spatial_resolution,int,120
+diffusion_grid/trilinear_interpolation,bool,true
+diffusion_grid/biochemicals,string,Gluc
+#,#,#
+### Gluc (glucose) - ISO 10% boundary condition
+Gluc/diffusion_coefficient,float,6.0
+Gluc/dissipation_coefficient,float,0.0
+Gluc/initial_value/min,float,1.0
+Gluc/initial_value/max,float,1.0
+#,#,#
+### necrotic_cell (non-viable debris)
+necrotic_cell/phenotype_ID,int,0
+necrotic_cell/initial_population,int,22
+# Place necrotic seed cells in the spheroid core (not randomly throughout domain)
+necrotic_cell/initial_population/pattern,string,sphere/inside
+necrotic_cell/initial_population/pattern/sphere/center/0,float,0.0
+necrotic_cell/initial_population/pattern/sphere/center/1,float,0.0
+necrotic_cell/initial_population/pattern/sphere/center/2,float,0.0
+necrotic_cell/initial_population/pattern/sphere/radius,float,PLACEHOLDER_NECROTIC_CORE_RADIUS
+necrotic_cell/mechanism_order,int,10
+necrotic_cell/diameter/min,float,1.0
+necrotic_cell/diameter/max,float,2.5
+necrotic_cell/can_apoptose,bool,false
+necrotic_cell/can_apoptose/probability,float,0.0
+necrotic_cell/can_apoptose/time_window,int,1000000
+necrotic_cell/can_apoptose/time_window/to_delete,int,1000000
+necrotic_cell/can_grow,bool,false
+necrotic_cell/can_divide,bool,false
+necrotic_cell/can_transform,bool,false
+necrotic_cell/can_migrate,bool,false
+necrotic_cell/can_polarize,bool,false
+necrotic_cell/can_protrude,bool,false
+necrotic_cell/density,float,0.1
+necrotic_cell/adherence,float,2.0
+#,#,#
+### normoxic_cell (viable NIH3T3 fibroblast control cells)
+normoxic_cell/phenotype_ID,int,1
+# PLACEHOLDER_INITIAL_POPULATION will be replaced by run_abm4bio.py from t=0 experimental area
+normoxic_cell/initial_population,int,PLACEHOLDER_N0
+normoxic_cell/initial_population/pattern,string,sphere/inside
+normoxic_cell/initial_population/pattern/sphere/center/0,float,0.0
+normoxic_cell/initial_population/pattern/sphere/center/1,float,0.0
+normoxic_cell/initial_population/pattern/sphere/center/2,float,0.0
+# PLACEHOLDER_INIT_RADIUS will be replaced: sqrt(shell_area_um2_t0 / pi) * scaling
+normoxic_cell/initial_population/pattern/sphere/radius,float,PLACEHOLDER_SPHERE_RADIUS
+normoxic_cell/mechanism_order,int,11
+normoxic_cell/diameter/min,float,15.0
+normoxic_cell/diameter/max,float,18.0
+normoxic_cell/principal/0,float,1.00
+normoxic_cell/principal/1,float,1.00
+normoxic_cell/principal/2,float,1.00
+normoxic_cell/principal/min,float,1.0
+normoxic_cell/principal/max,float,1.0
+normoxic_cell/density,float,1.0
+normoxic_cell/adherence,float,1.0
+#,#,#
+### Growth parameters (mechanism 11 style)
+normoxic_cell/can_grow,bool,true
+normoxic_cell/can_grow/probability,float,0.882931
+normoxic_cell/can_grow/diameter_rate,float,0.0
+# CALIBRATED: proliferation_threshold -> minimum Gluc for growth
+normoxic_cell/can_grow/Gluc/threshold,float,0.326589
+normoxic_cell/can_grow/Gluc/diameter_rate,float,0.30
+# Mechanism-11 checkpoint gates (nutrient-controlled G1/S and growth)
+normoxic_cell/checkpoint/G1S/nutrient_min,float,0.326589
+normoxic_cell/checkpoint/growth/nutrient_min,float,0.326589
+#,#,#
+### Division parameters
+normoxic_cell/can_divide,bool,true
+normoxic_cell/can_divide/probability,float,0.510827
+normoxic_cell/can_divide/probability_increment_with_age,float,0.0
+normoxic_cell/can_divide/diameter_cutoff,float,17.0
+normoxic_cell/can_divide/max,int,20
+normoxic_cell/can_divide/time_window,int,174
+normoxic_cell/can_divide/Gluc/threshold,float,0.326589
+normoxic_cell/can_divide/influence_ratio,float,0.0
+normoxic_cell/can_divide/max_occupancy,float,1.0
+#,#,#
+### Mechanism-11 cell-cycle phase dwell times
+# CALIBRATED: cell_cycle_time_h -> total dwell = G1+Sy+G2 = round(h/dt)
+# Proportions fixed at 80:70:40 (G1:Sy:G2 = ~42%:37%:21%)
+normoxic_cell/phase_dwell/G1,int,90
+normoxic_cell/phase_dwell/Sy,int,78
+normoxic_cell/phase_dwell/G2,int,45
+#,#,#
+### Quiescence (mechanism 11: nutrient-driven G0)
+# CALIBRATED: quiescence_threshold -> nutrient level below which cells arrest
+normoxic_cell/quiescence/nutrient_threshold,float,0.0984372
+normoxic_cell/quiescence/entry_hazard_rate,float,2.0
+normoxic_cell/quiescence/exit_hazard_rate,float,0.5
+#,#,#
+### Nutrient uptake (Michaelis-Menten model, like reference input_inVitro.csv)
+# CALIBRATED: nutrient_vmax -> Vmax of MM model (negative = consumption)
+# Km fixed at 0.25 (normalized, from reference calibration)
+normoxic_cell/Gluc/secretion/michaelis_menten_model,bool,true
+normoxic_cell/Gluc/secretion/michaelis_menten/Vmax,float,-0.0300386
+normoxic_cell/Gluc/secretion/michaelis_menten/Km,float,0.25
+#,#,#
+### Necrotic transformation (low-glucose, mechanism-11 style)
+# CALIBRATED: necrosis_threshold -> threshold = -necrosis_threshold (negative triggers when Gluc < |threshold|)
+normoxic_cell/can_transform,bool,true
+normoxic_cell/can_transform/probability,float,0.894718
+normoxic_cell/can_transform/Gluc/probability,float,0.25
+normoxic_cell/can_transform/Gluc/threshold,float,-0.0507893
+normoxic_cell/can_transform/Gluc/time_window_open,int,50
+normoxic_cell/can_transform/Gluc/time_window_close,int,11111111
+normoxic_cell/can_transform/Gluc/new_phenotype,int,0
+#,#,#
+### Apoptosis: enabled so CheckNecrosis() works (probability=0 = no spontaneous apoptosis)
+normoxic_cell/can_apoptose,bool,true
+normoxic_cell/can_apoptose/probability,float,0.0
+normoxic_cell/can_apoptose/time_window,int,100000
+normoxic_cell/can_apoptose/time_window/to_delete,int,100000
+#,#,#
+### No migration (control spheroid)
+normoxic_cell/can_migrate,bool,false
+normoxic_cell/can_migrate/speed,float,0.0
+normoxic_cell/can_migrate/persistence_time,float,0.0
+normoxic_cell/can_migrate/half_range,float,1e-2
+normoxic_cell/can_migrate/probability,float,0.0
+normoxic_cell/can_migrate/chemotaxis,float,0.0
+normoxic_cell/can_migrate/max_adhesion/displacement,float,0.0
+#,#,#
+normoxic_cell/can_polarize,bool,false
+normoxic_cell/can_protrude,bool,false

@@ -1,0 +1,36 @@
+// -----------------------------------------------------------------------------
+//
+// Copyright (C) 2021 CERN & University of Surrey for the benefit of the
+// BioDynaMo collaboration. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+//
+// See the LICENSE file distributed with this work for details.
+// See the NOTICE file distributed with this work for additional information
+// regarding copyright ownership.
+//
+// -----------------------------------------------------------------------------
+
+#ifndef CORE_VIRTUALIZATION_VIRTUALIZATION_ADAPTOR_H_
+#define CORE_VIRTUALIZATION_VIRTUALIZATION_ADAPTOR_H_
+
+#include <string>
+
+namespace bdm {
+
+class VisualizationAdaptor {
+ public:
+  VisualizationAdaptor() = default;
+
+  static VisualizationAdaptor* Create(const std::string& adaptor);
+
+  virtual ~VisualizationAdaptor() = default;
+
+  // To be implemented by the adaptor
+  virtual void Visualize() = 0;
+};
+
+}  // namespace bdm
+
+#endif  // CORE_VIRTUALIZATION_VIRTUALIZATION_ADAPTOR_H_

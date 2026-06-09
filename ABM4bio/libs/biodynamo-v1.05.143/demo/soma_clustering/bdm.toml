@@ -1,0 +1,12 @@
+[visualization]
+export = true
+interval = 10
+
+    [[visualize_agent]]
+    name = "MyCell"
+    additional_data_members = [ "diameter_", "cell_type_" ]
+
+    [[visualize_diffusion]]
+    name = "Substance_0"
+    gradient = true
+

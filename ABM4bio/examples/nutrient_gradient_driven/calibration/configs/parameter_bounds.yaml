@@ -1,0 +1,182 @@
+# ==============================================================================
+# Parameter bounds for NIH3T3 control calibration (5 core parameters)
+# ==============================================================================
+#
+# Each parameter entry:
+#   min, max   : search bounds
+#   scale      : "linear" or "log" (Optuna suggest_float / suggest_float(log=True))
+#   description: human-readable meaning
+#   csv_keys   : list of (key, transform) pairs → how value maps to input CSV
+#
+# Transform functions:
+#   identity          : use value as-is
+#   neg               : use -value  (for "below" thresholds in ABM4bio)
+#   round_div_dt      : round(value / time_step) → convert hours to integer steps
+#   neg_round_div_dt  : -round(value / time_step) (unused here)
+#
+# Constraint enforced in optimize_optuna.py:
+#   necrosis_threshold < quiescence_threshold < proliferation_threshold
+# ==============================================================================
+
+time_step_h: 0.1   # used by round_div_dt transform
+
+parameters:
+
+  initial_necrotic_cells:
+    min: 0
+    max: 220
+    scale: linear
+    description: >
+      Initial necrotic-cell seeding in the spheroid core at t=0.
+      This accelerates emergence of realistic core-area trajectories.
+    csv_keys:
+      - key: "necrotic_cell/initial_population"
+        type: int
+        transform: identity
+
+  phase_G1_h:
+    min: 3.0
+    max: 20.0
+    scale: linear
+    description: >
+      G1-phase dwell time in hours. This is the most variable phase between cell
+      lines. NIH3T3 fibroblasts typically spend ~9-11h in G1 (~18-22h total cycle).
+      Mapped to normoxic_cell/phase_dwell/G1 in integer steps (h / dt).
+    csv_keys:
+      - key: "normoxic_cell/phase_dwell/G1"
+        type: int
+        transform: round_div_dt
+
+  phase_S_h:
+    min: 3.0
+    max: 10.0
+    scale: linear
+    description: >
+      S-phase (DNA synthesis) dwell time in hours. Relatively conserved across
+      cell lines (~6-7h for NIH3T3). Mapped to normoxic_cell/phase_dwell/Sy.
+    csv_keys:
+      - key: "normoxic_cell/phase_dwell/Sy"
+        type: int
+        transform: round_div_dt
+
+  phase_G2_h:
+    min: 1.5
+    max: 6.0
+    scale: linear
+    description: >
+      G2+M phase dwell time in hours. Short in most cell lines (~2-4h for NIH3T3).
+      Mapped to normoxic_cell/phase_dwell/G2.
+    csv_keys:
+      - key: "normoxic_cell/phase_dwell/G2"
+        type: int
+        transform: round_div_dt
+
+  nutrient_vmax:
+    min: 0.002
+    max: 0.08
+    scale: log
+    description: >
+      Michaelis-Menten maximum uptake rate (Vmax) for glucose consumption.
+      Km is fixed at 0.25 (normalised, from reference calibration).
+      Stored as a negative value (consumption) in the MM model.
+    csv_keys:
+      - key: "normoxic_cell/Gluc/secretion/michaelis_menten/Vmax"
+        type: float
+        transform: neg
+
+  cell_grow_probability:
+    min: 0.35
+    max: 0.95
+    scale: linear
+    description: >
+      Per-step growth activation probability for normoxic cells.
+    csv_keys:
+      - key: "normoxic_cell/can_grow/probability"
+        type: float
+        transform: identity
+
+  cell_divide_probability:
+    min: 0.20
+    max: 0.95
+    scale: linear
+    description: >
+      Division probability gate in mechanism-11, complements diameter and phase checks.
+    csv_keys:
+      - key: "normoxic_cell/can_divide/probability"
+        type: float
+        transform: identity
+
+  gluc_transform_prob:
+    min: 0.05
+    max: 0.80
+    scale: linear
+    description: >
+      Glucose-branch probability for necrotic transformation. This is a secondary
+      probability gate fired only when glucose < necrosis_threshold; it controls
+      how rapidly cells commit to necrosis vs transiently surviving hypoxia.
+      Mapped to normoxic_cell/can_transform/Gluc/probability.
+    csv_keys:
+      - key: "normoxic_cell/can_transform/Gluc/probability"
+        type: float
+        transform: identity
+
+  necrosis_transform_probability:
+    min: 0.05
+    max: 0.90
+    scale: linear
+    description: >
+      Probability of transforming a normoxic cell to necrotic phenotype under low glucose.
+    csv_keys:
+      - key: "normoxic_cell/can_transform/probability"
+        type: float
+        transform: identity
+
+  proliferation_threshold:
+    min: 0.05
+    max: 0.50
+    scale: linear
+    description: >
+      Minimum glucose level for cell growth and division (normalised [0,1]).
+      Applied to can_grow/Gluc/threshold, can_divide/Gluc/threshold,
+      checkpoint/G1S/nutrient_min, and checkpoint/growth/nutrient_min.
+    csv_keys:
+      - key: "normoxic_cell/can_grow/Gluc/threshold"
+        type: float
+        transform: identity
+      - key: "normoxic_cell/can_divide/Gluc/threshold"
+        type: float
+        transform: identity
+      - key: "normoxic_cell/checkpoint/G1S/nutrient_min"
+        type: float
+        transform: identity
+      - key: "normoxic_cell/checkpoint/growth/nutrient_min"
+        type: float
+        transform: identity
+
+  necrosis_threshold:
+    min: 0.01
+    max: 0.30
+    scale: linear
+    description: >
+      Glucose level below which viable cells can undergo necrotic transformation.
+      ABM4bio convention: stored as a negative value in can_transform/Gluc/threshold
+      so that the "threshold < 0" branch (conc < |threshold|) is triggered.
+    constraint: "necrosis_threshold < proliferation_threshold"
+    csv_keys:
+      - key: "normoxic_cell/can_transform/Gluc/threshold"
+        type: float
+        transform: neg
+
+  quiescence_threshold:
+    min: 0.02
+    max: 0.45
+    scale: linear
+    description: >
+      Glucose level below which cells become quiescent (G0 arrest).
+      Used in mechanism-11 quiescence/nutrient_threshold.
+      Constraint: necrosis_threshold < quiescence_threshold < proliferation_threshold.
+    constraint: "necrosis_threshold < quiescence_threshold < proliferation_threshold"
+    csv_keys:
+      - key: "normoxic_cell/quiescence/nutrient_threshold"
+        type: float
+        transform: identity
