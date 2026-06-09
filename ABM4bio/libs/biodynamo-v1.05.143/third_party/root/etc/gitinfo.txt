@@ -1,3 +1,0 @@
-heads/master
-tags/v6-30-02
-Jan 24 2024, 15:07:16

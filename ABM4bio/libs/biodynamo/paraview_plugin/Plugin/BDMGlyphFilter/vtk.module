@@ -1,8 +1,0 @@
-NAME
-  BDM
-LIBRARY_NAME
-  BDM
-DEPENDS
-  VTK::FiltersCore
-PRIVATE_DEPENDS
-  VTK::CommonCore

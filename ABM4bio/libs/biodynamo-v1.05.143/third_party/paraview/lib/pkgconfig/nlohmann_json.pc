@@ -1,4 +1,0 @@
-Name: nlohmann_json
-Description: JSON for Modern C++
-Version: 3.9.1
-Cflags: -I/home/rdm/bdm-build-third-party/paraview/build/install/include

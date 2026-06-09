@@ -1,6 +1,0 @@
-
-add_library(Qt5::QWaylandXCompositeEglPlatformIntegrationPlugin MODULE IMPORTED)
-
-_populate_Gui_plugin_properties(QWaylandXCompositeEglPlatformIntegrationPlugin RELEASE "platforms/libqwayland-xcomposite-egl.so")
-
-list(APPEND Qt5Gui_PLUGINS Qt5::QWaylandXCompositeEglPlatformIntegrationPlugin)

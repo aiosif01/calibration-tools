@@ -1,3 +1,0 @@
-// Generated file, DO NOT EDIT
-#define QML_COMPILE_HASH "36e4e9bbd402cefab9d7b68635a94a02e0b41187"
-#define QML_COMPILE_HASH_LENGTH 40
