@@ -1,0 +1,13 @@
+# Local Optuna runtime defaults (override via env or CLI).
+n_trials: 200
+n_replicates: 3
+validation_replicates: 10
+n_startup_trials: 30
+sampler_seed: 1234
+prune_after_replicates: 2
+abm_base_seed: 1234
+abm_seed_step: 17
+use_abm_seed: false
+
+# Debug budget (set N_TRIALS=20 for quick smoke tests)
+debug_n_trials: 20

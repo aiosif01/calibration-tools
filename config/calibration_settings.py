@@ -1,10 +1,10 @@
 """
 Central calibration / optimization settings for calibration-tools.
 
-Edit this file to change templates, mechanism, LM budgets, early-stop, and
-per-cell-line defaults. CLI flags in calibrate_one_case.py still override these.
+Edit this file to change templates, mechanism, Optuna budgets, early-stop, and
+per-cell-line defaults. CLI flags in run_optuna_control.py still override these.
 
-MATLAB reference: Levenberg-Marquardt_MATLAB/ (mechanism 11; control is O2-only, no RONS).
+MATLAB reference (least-squares branch): Levenberg-Marquardt_MATLAB/ (mechanism 11).
 """
 from __future__ import annotations
 
@@ -66,29 +66,42 @@ MECHANISM11_PARAMETER_KEYS: tuple[str, ...] = (
 MECHANISM11_PLACEHOLDERS: tuple[str, ...] = ()
 
 # ---------------------------------------------------------------------------
-# Shared optimization defaults (scipy.optimize.least_squares / staged control)
+# Optuna optimization defaults (optuna branch)
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
-class OptimizerSettings:
-    method: str = "trf"
-    staged: bool = True
+class OptunaSettings:
+    n_trials: int = 200
+    debug_n_trials: int = 20
+    n_replicates: int = 3
+    validation_replicates: int = 10
+    n_startup_trials: int = 30
+    sampler_seed: int = 1234
+    prune_after_replicates: int = 2
     log_space: bool = True
     normalize_sim_to_t0: bool = True
     target_mode: str = "t0_normalized"
     time_points: tuple[int, ...] = (0, 24, 48, 72)
-    global_nfev: int = 0
-    global_seed: int = 1234
-    stage_nfev: tuple[int, ...] = (40, 40, 150)
     use_abm_seed: bool = False
-    max_nfev_single: int = 150
-    replicates: int = 2
     abm_base_seed: int = 1234
     abm_seed_step: int = 17
-    diff_step: float = MATLAB_LM_DIFF_STEP
-    xtol: float = 1e-6
-    ftol: float = 1e-6
-    gtol: float = 1e-6
     sigma: str = "data"
+    parameter_space_control: Path = field(
+        default_factory=lambda: REPO_ROOT / "configs" / "parameter_space_control.yaml"
+    )
+    parameter_space_treatment: Path = field(
+        default_factory=lambda: REPO_ROOT / "configs" / "parameter_space_treatment.yaml"
+    )
+    objective_control: Path = field(
+        default_factory=lambda: REPO_ROOT / "configs" / "objective_control.yaml"
+    )
+    objective_treatment: Path = field(
+        default_factory=lambda: REPO_ROOT / "configs" / "objective_treatment.yaml"
+    )
+    studies_dir: Path = field(default_factory=lambda: REPO_ROOT / "outputs" / "optuna" / "studies")
+
+
+# Backward-compatible alias (scripts that still reference OPTIMIZER)
+OptimizerSettings = OptunaSettings
 
 
 @dataclass(frozen=True)
@@ -155,7 +168,8 @@ CELL_LINE_SETTINGS: Mapping[str, CellLineSettings] = {
     name: _default_cell_line(name) for name in CELL_LINES
 }
 
-OPTIMIZER = OptimizerSettings()
+OPTUNA = OptunaSettings()
+OPTIMIZER = OPTUNA
 EARLY_STOP = EarlyStopSettings()
 HORIZON_GATE = HorizonGateSettings()
 
@@ -182,7 +196,17 @@ def get_cell_line_settings(cell_line: str) -> CellLineSettings:
 
 
 def control_out_dir(cell_line: str) -> Path:
-    return EXECUTABLES_DIR / cell_line / "outputs" / "calibration_control"
+    return REPO_ROOT / "outputs" / "optuna" / cell_line / "control"
+
+
+def treatment_out_dir(cell_line: str, exposure_seconds: int) -> Path:
+    label = f"treat_{exposure_seconds}s"
+    return REPO_ROOT / "outputs" / "optuna" / cell_line / label
+
+
+def optuna_study_db(cell_line: str, case_label: str) -> str:
+    db_path = OPTUNA.studies_dir / f"{cell_line}_{case_label}.db"
+    return f"sqlite:///{db_path}"
 
 
 def resolve_control_template(cell_line: str) -> Path:

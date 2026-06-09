@@ -16,7 +16,7 @@ class LiveCalibrationPlotter:
         out_dir: str | Path,
         *,
         live: bool = True,
-        title: str = "ABM4bio LM calibration",
+        title: str = "ABM4bio Optuna calibration",
         parameter_names: Sequence[str] | None = None,
     ):
         self.out_dir = Path(out_dir)
@@ -32,6 +32,7 @@ class LiveCalibrationPlotter:
         self.axes = None
         if self.live:
             try:
+                matplotlib.use("TkAgg")
                 plt.ion()
                 self.fig, self.axes = plt.subplots(2, 2, figsize=(12, 8))
                 self.fig.suptitle(self.title)

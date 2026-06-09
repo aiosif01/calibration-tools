@@ -1,0 +1,7 @@
+# Objective settings for treatment calibration.
+target_mode: t0_normalized
+time_points: [0, 24, 48, 72]
+log_space: true
+normalize_sim_to_t0: true
+include_penalty: true
+exclude_t0: true

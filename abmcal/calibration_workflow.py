@@ -1,3 +1,4 @@
+"""Shared calibration workflow infrastructure (method-neutral)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,27 +8,15 @@ from typing import Callable, Sequence
 import numpy as np
 import pandas as pd
 
-from .abm_runner import ABMRunConfig, calibration_input_overrides, run_abm_once
-from .calibration_config import (
-    HORIZON_GATE,
-    MECHANISM_11,
-    MECHANISM_12,
-)
+from .abm_runner import ABMRunConfig, run_abm_once
+from .calibration_config import MECHANISM_11, MECHANISM_12
 from .calibration_params import (
-    CALIBRATION_HORIZONS,
     CONTROL_FAST_RUNTIME_OVERRIDES,
-    CONTROL_MECHANISM12_PARAMETER_KEYS,
-    CONTROL_PARAMETER_X_SCALE,
     CONTROL_PROLIFERATION_OVERRIDES,
-    MECHANISM11_CALIBRATION_STAGE_TIME_WEIGHTS,
     build_mechanism11_runtime_overrides,
-    is_mechanism11_fit_keys,
-    mechanism11_fit_vectors,
     parameter_overrides_from_vector,
 )
 from .data_loader import select_target_vector
-from .lm_calibrator import FitResult, fit_lm_like, fit_sequential_horizons
-from .live_plots import LiveCalibrationPlotter
 
 
 @dataclass
@@ -161,106 +150,4 @@ def build_abm_config(ctx: CalibrationContext) -> ABMRunConfig:
         early_stop_required_end_h=ctx.early_stop_required_end_h,
         early_stop_min_sim_hour_fraction=ctx.early_stop_min_sim_hour_fraction,
         early_stop_poll_interval_s=ctx.early_stop_poll_interval_s,
-    )
-
-
-def run_control_calibration(
-    ctx: CalibrationContext,
-    *,
-    x0: Sequence[float],
-    lb: Sequence[float],
-    ub: Sequence[float],
-    staged: bool = True,
-    global_nfev: int = 40,
-    global_seed: int = 1234,
-    stage_nfev: Sequence[int] = (40, 50, 60),
-    method: str = "trf",
-    max_nfev: int = 120,
-    log_space: bool = True,
-    normalize_sim_to_t0: bool = True,
-    diff_step: float = 0.03,
-    live_plotter: LiveCalibrationPlotter | None = None,
-    verbose: bool = False,
-    parameter_keys: Sequence[str] | None = None,
-    horizon_gate_enabled: bool | None = None,
-    horizon_gate_min_sim_to_target: float | None = None,
-    horizon_gate_max_sim_to_target: float | None = None,
-) -> FitResult:
-    config = build_abm_config(ctx)
-    simulate_factory = make_simulate_factory(ctx, config)
-
-    def target_loader(time_points: Sequence[int]):
-        return load_targets(ctx, time_points)
-
-    if staged:
-        budgets = list(stage_nfev)
-        default_budgets = [40, 40, 100]
-        while len(budgets) < len(CALIBRATION_HORIZONS):
-            budgets.append(default_budgets[len(budgets)])
-        horizons = tuple(
-            (label, tp, int(budgets[i]))
-            for i, (label, tp) in enumerate(CALIBRATION_HORIZONS)
-        )
-        x_scale = None
-        horizon_time_weights = None
-        if parameter_keys:
-            keys = list(parameter_keys)
-            if is_mechanism11_fit_keys(keys):
-                _, _, _, x_scale_tuple = mechanism11_fit_vectors(keys)
-                x_scale = list(x_scale_tuple)
-                horizon_time_weights = list(MECHANISM11_CALIBRATION_STAGE_TIME_WEIGHTS)
-            else:
-                lookup = {name: index for index, name in enumerate(CONTROL_MECHANISM12_PARAMETER_KEYS)}
-                x_scale = [CONTROL_PARAMETER_X_SCALE[lookup[name]] for name in keys]
-
-        gate_enabled = HORIZON_GATE.enabled if horizon_gate_enabled is None else horizon_gate_enabled
-        gate_min = (
-            HORIZON_GATE.min_sim_to_target
-            if horizon_gate_min_sim_to_target is None
-            else horizon_gate_min_sim_to_target
-        )
-        gate_max = (
-            HORIZON_GATE.max_sim_to_target
-            if horizon_gate_max_sim_to_target is None
-            else horizon_gate_max_sim_to_target
-        )
-
-        return fit_sequential_horizons(
-            simulate_factory,
-            horizons=horizons,
-            target_loader=target_loader,
-            x0=x0,
-            lb=lb,
-            ub=ub,
-            method=method,
-            normalize_sim_to_t0=normalize_sim_to_t0,
-            log_space=log_space,
-            live_plotter=live_plotter,
-            diff_step=diff_step,
-            parameter_x_scale=x_scale,
-            horizon_time_weights=horizon_time_weights,
-            horizon_gate_enabled=gate_enabled,
-            horizon_gate_min_sim_to_target=gate_min,
-            horizon_gate_max_sim_to_target=gate_max,
-            verbose=verbose,
-        )
-
-    t, y, sigma = target_loader(tuple(config.time_points))
-    simulate = simulate_factory(config.time_points, "single")
-    return fit_lm_like(
-        simulate,
-        t=t,
-        y_data=y,
-        sigma=sigma,
-        x0=x0,
-        lb=lb,
-        ub=ub,
-        method=method,
-        max_nfev=max_nfev,
-        live_plotter=live_plotter,
-        normalize_sim_to_t0=normalize_sim_to_t0,
-        log_space=log_space,
-        diff_step=diff_step,
-        verbose=verbose,
-        stage_label="single",
     )

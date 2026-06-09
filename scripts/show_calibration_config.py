@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,8 +14,7 @@ sys.path.insert(0, str(ROOT))
 from abmcal.calibration_config import (  # noqa: E402
     CELL_LINES,
     EARLY_STOP,
-    HORIZON_GATE,
-    OPTIMIZER,
+    OPTUNA,
     TARGETS_CSV,
     get_cell_line_settings,
     resolve_control_template,
@@ -26,11 +26,12 @@ from config.calibration_settings import (  # noqa: E402
 )
 
 
-def _path_str(p: Path) -> str:
+def _path_str(p: Path | str) -> str:
+    path = Path(p) if not isinstance(p, Path) else p
     try:
-        return str(p.relative_to(ROOT))
+        return str(path.relative_to(ROOT))
     except ValueError:
-        return str(p)
+        return str(path)
 
 
 def main() -> None:
@@ -44,12 +45,21 @@ def main() -> None:
         lines = [lines]
 
     payload = {
-        "optimizer": OPTIMIZER.__dict__,
-        "early_stop": EARLY_STOP.__dict__,
-        "horizon_gate": HORIZON_GATE.__dict__,
+        "optuna": asdict(OPTUNA),
+        "early_stop": asdict(EARLY_STOP),
         "targets_csv": _path_str(TARGETS_CSV),
         "cell_lines": {},
     }
+    path_keys = {
+        "parameter_space_control",
+        "parameter_space_treatment",
+        "objective_control",
+        "objective_treatment",
+        "studies_dir",
+    }
+    for key, val in payload["optuna"].items():
+        if isinstance(val, Path) or key in path_keys:
+            payload["optuna"][key] = _path_str(val)
 
     for name in lines:
         cfg = get_cell_line_settings(name)
@@ -69,22 +79,21 @@ def main() -> None:
         print(json.dumps(payload, indent=2))
         return
 
-    print("Calibration settings (config/calibration_settings.py)")
+    print("Optuna calibration settings (config/calibration_settings.py)")
     print("=" * 60)
-    print(f"Optimizer: method={OPTIMIZER.method}, staged={OPTIMIZER.staged}, stage_nfev={OPTIMIZER.stage_nfev}")
-    print(f"  horizons: 0-24h -> 0-48h -> 0-72h, use_abm_seed={OPTIMIZER.use_abm_seed}")
-    print(f"  global_nfev={OPTIMIZER.global_nfev}, max_nfev_single={OPTIMIZER.max_nfev_single}, replicates={OPTIMIZER.replicates}")
-    print(f"Early stop: enabled={EARLY_STOP.enabled}, overgrowth_factor={EARLY_STOP.overgrowth_factor}")
     print(
-        f"Horizon gate: enabled={HORIZON_GATE.enabled}, "
-        f"sim/target in [{HORIZON_GATE.min_sim_to_target}, {HORIZON_GATE.max_sim_to_target}]"
+        f"Optuna: n_trials={OPTUNA.n_trials}, n_replicates={OPTUNA.n_replicates}, "
+        f"validation_replicates={OPTUNA.validation_replicates}"
     )
+    print(f"  sampler_seed={OPTUNA.sampler_seed}, n_startup_trials={OPTUNA.n_startup_trials}")
+    print(f"  parameter_space_control: {_path_str(OPTUNA.parameter_space_control)}")
+    print(f"  studies_dir: {_path_str(OPTUNA.studies_dir)}")
+    print(f"Early stop: enabled={EARLY_STOP.enabled}, overgrowth_factor={EARLY_STOP.overgrowth_factor}")
     print(f"Targets CSV: {_path_str(TARGETS_CSV)}")
     print(
         f"Mechanism-11 timing: dt={MECHANISM11_TIME_STEP_H} h, "
         f"simulation={MECHANISM11_SIMULATION_HOURS} h "
-        f"({int(MECHANISM11_SIMULATION_HOURS / MECHANISM11_TIME_STEP_H)} steps); "
-        "cell-cycle dwell/maturity fixed in template; size/O2 gates fitted"
+        f"({int(MECHANISM11_SIMULATION_HOURS / MECHANISM11_TIME_STEP_H)} steps)"
     )
     print()
     for name in lines:
@@ -93,7 +102,6 @@ def main() -> None:
         print(f"  control:  {entry['control_template']}")
         print(f"  treated:  {entry['treated_template']}")
         print(f"  params:   {', '.join(entry['parameter_keys'])}")
-        print(f"  x0:       {entry['x0']}")
         print()
 
 
