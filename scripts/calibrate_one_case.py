@@ -20,7 +20,11 @@ from abmcal.calibration_config import (
     get_cell_line_settings,
     resolve_control_template,
 )
-from abmcal.calibration_params import CONTROL_FIT_PARAMETER_KEYS, default_fit_bounds
+from abmcal.calibration_params import (
+    CONTROL_FIT_PARAMETER_KEYS,
+    adjust_mechanism11_lb_for_initial_cells,
+    default_fit_bounds,
+)
 from abmcal.time_units import read_template_time_step_hours
 from abmcal.calibration_plots import save_calibration_result_plots
 from abmcal.calibration_workflow import CalibrationContext, build_abm_config, load_targets, make_simulate_factory, run_control_calibration
@@ -179,7 +183,12 @@ def main() -> None:
         mechanism=mechanism,
     )
     x0 = parse_float_list(args.x0 if args.x0 is not None else default_x0)
-    lb = parse_float_list(args.lb if args.lb is not None else default_lb)
+    copy_files = tuple(Path(x) for x in args.copy_file if x)
+    lb = adjust_mechanism11_lb_for_initial_cells(
+        parse_float_list(args.lb if args.lb is not None else default_lb),
+        parameter_keys,
+        copy_files,
+    )
     ub = parse_float_list(args.ub if args.ub is not None else default_ub)
     stage_nfev = parse_int_list(args.stage_nfev or "40,40,100")
 
@@ -241,7 +250,7 @@ def main() -> None:
         ),
         control_mode=args.control_mode,
         set_cap_duration=args.set_cap_duration,
-        copy_files=tuple(Path(x) for x in args.copy_file if x),
+        copy_files=copy_files,
         mock=args.mock,
         stream_stdout=not args.mock and not args.quiet,
         strip_visualization=not args.mock,

@@ -107,6 +107,52 @@ def parameter_plot_color(key: str, index: int = 0) -> str:
     return palette[index % len(palette)]
 
 
+def read_initial_cells_max_diameter(path: str | Path) -> float | None:
+    """Largest cell diameter in an ABM4bio initial_cells.dat file (column 4)."""
+    p = Path(path)
+    if not p.is_file():
+        return None
+    max_dia: float | None = None
+    with p.open(encoding="utf-8") as handle:
+        lines = [line.strip() for line in handle if line.strip()]
+    for line in lines[1:]:
+        parts = line.split()
+        if len(parts) < 4:
+            continue
+        dia = float(parts[3])
+        max_dia = dia if max_dia is None else max(max_dia, dia)
+    return max_dia
+
+
+def find_initial_cells_file(copy_files: Sequence[Path]) -> Path | None:
+    for path in copy_files:
+        if path.name == "initial_cells.dat" and path.is_file():
+            return path
+    return None
+
+
+def adjust_mechanism11_lb_for_initial_cells(
+    lb: Sequence[float],
+    parameter_keys: Sequence[str] | None,
+    copy_files: Sequence[Path],
+) -> list[float]:
+    """Keep fitted diameter/max above pre-placed cells so ABM4bio init does not abort."""
+    keys = list(parameter_keys or MECHANISM11_PARAMETER_KEYS)
+    key = "normoxic_CC/diameter/max"
+    if key not in keys:
+        return list(lb)
+    idx = keys.index(key)
+    initial_path = find_initial_cells_file(copy_files)
+    if initial_path is None:
+        return list(lb)
+    max_dia = read_initial_cells_max_diameter(initial_path)
+    if max_dia is None:
+        return list(lb)
+    out = list(lb)
+    out[idx] = max(out[idx], max_dia)
+    return out
+
+
 def mechanism11_fit_vectors(
     keys: Sequence[str],
     *,

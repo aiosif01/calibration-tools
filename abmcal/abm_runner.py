@@ -151,7 +151,13 @@ def run_abm_once(
             )
 
         if returncode != 0 and not early_stopped:
-            raise RuntimeError(f"ABM command failed with exit code {returncode}. See {log_path}")
+            if config.stream_stdout:
+                print(
+                    f">>> ABM run failed (exit {returncode}); applying bad-fit penalty. See {log_path}",
+                    flush=True,
+                )
+            replicate_vectors.append(overgrowth_penalty_vector(config.time_points))
+            continue
 
         if early_stopped:
             replicate_vectors.append(overgrowth_penalty_vector(config.time_points))

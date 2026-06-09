@@ -1,0 +1,7 @@
+parameter_name,fitted_value
+normoxic_CC/can_grow/probability,0.49144962668020375
+normoxic_CC/can_grow/diameter_rate,16.403008691919847
+normoxic_CC/can_divide/probability,0.6387995865727366
+normoxic_CC/can_divide/diameter_cutoff,17.31315743140613
+normoxic_CC/can_divide/O2/threshold,0.7647907137032182
+normoxic_CC/diameter/max,23.305686319109874
