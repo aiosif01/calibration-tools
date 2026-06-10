@@ -1,49 +1,13 @@
 # Local machine paths (copy from scripts/abm_paths.local.sh.example)
 scripts/abm_paths.local.sh
 
-# ABM4bio is an external dependency — do not vendor it in this repo
+# External ABM4bio install (not vendored in this repo)
 ABM4bio/
-bdm-abm4bio/
 
 # Python bytecode
 __pycache__/
 *.pyc
 
-# Prerequisites
-*.d
-
-# Library/dependencies, compiled code, simulation results
-libs/*
-libs/pagmo-pygmo-source/
-build/*
-examples/*/results/*
-
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
+# Optuna study databases and run artifacts (regenerate via executables/*/optuna_*.sh)
+outputs/optuna/EGI1/control/abm_evals
+outputs/optuna/studies/*.db

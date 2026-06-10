@@ -71,7 +71,7 @@ def run_abm_once(
     if template_output_dir and template_output_dir not in candidate_output_dirs:
         candidate_output_dirs.append(template_output_dir)
 
-    # Copy support files such as initial_cells.dat or a Makefile into the isolated run directory.
+    # Copy optional support files (e.g. Makefile) into the isolated run directory.
     for src in config.copy_files:
         src = Path(src)
         if src.exists():

@@ -30,7 +30,12 @@ from abmcal.data_loader import exposure_pretty, read_cap_excel_long, select_targ
 from abmcal.live_plots import LiveCalibrationPlotter  # noqa: E402
 from abmcal.method.optuna_engine import OptunaRunConfig, run_optuna_calibration  # noqa: E402
 from abmcal.method.parameter_space import load_parameter_space_yaml, parameter_space_from_bounds  # noqa: E402
-from abmcal.time_units import read_template_time_step_hours  # noqa: E402
+from abmcal.time_units import (  # noqa: E402
+    format_time_conversion_audit,
+    read_template_time_step_hours,
+    validate_simulation_clock,
+)
+from config.calibration_settings import CAP_EXPOSURE_SECONDS, mechanism12_simulation_clock  # noqa: E402
 
 
 def main() -> None:
@@ -109,7 +114,16 @@ def main() -> None:
         target_df = read_cap_excel_long(args.xlsx, recompute_mean=True)
 
     template_path = Path(args.template)
+    treat_clock = mechanism12_simulation_clock()
+    time_step_h = read_template_time_step_hours(template_path, default=treat_clock.time_step_h)
+    time_report = validate_simulation_clock(template_path, time_points, treat_clock)
     exposure_label = exposure_pretty(args.exposure_seconds)
+    if args.exposure_seconds not in CAP_EXPOSURE_SECONDS and not args.quiet:
+        print(
+            f"Note: exposure {args.exposure_seconds}s is not in configured CAP_EXPOSURE_SECONDS "
+            f"{CAP_EXPOSURE_SECONDS}",
+            flush=True,
+        )
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     work_root = Path(args.work_root) if args.work_root else out_dir / "abm_evals"
@@ -134,7 +148,7 @@ def main() -> None:
         target_df=target_df,
         target_mode=target_mode,
         calibration_overrides=calibration_input_overrides(template_path, mechanism=MECHANISM_12),
-        time_step_h=read_template_time_step_hours(template_path, default=0.01),
+        time_step_h=time_step_h,
         control_mode=False,
         set_cap_duration=args.set_cap_duration,
         copy_files=tuple(Path(x) for x in args.copy_file if x),
@@ -153,6 +167,15 @@ def main() -> None:
     )
 
     study_name = args.study_name or f"{args.cell_line}_treat_{args.exposure_seconds}s"
+    if not args.quiet and not args.mock:
+        print(f"  {treat_clock.describe()}", flush=True)
+        print(
+            f"  CAP exposure: {args.exposure_seconds} s → "
+            f"{treat_clock.cap_duration_steps(args.exposure_seconds)} steps",
+            flush=True,
+        )
+        for warning in time_report.warnings:
+            print(f"  TIME WARNING: {warning}", flush=True)
     plotter = LiveCalibrationPlotter(
         out_dir,
         live=args.live,

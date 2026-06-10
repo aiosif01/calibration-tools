@@ -109,10 +109,10 @@ This calibration repo expects ABM4bio as an external dependency.
    and set ABM4BIO_ROOT / ABM_BIN for a custom fork.
 
 3. Or pass ABM_BIN on the command line:
-     ABM_BIN=/path/to/ABM4bio/build/ABM4bio ./executables/EGI1/calibrate_control.sh
+     ABM_BIN=/path/to/ABM4bio/build/ABM4bio ./executables/EGI1/optuna_control.sh
 
 4. Smoke-test without ABM4bio:
-     MOCK_MODE=1 ./executables/EGI1/calibrate_control.sh
+     MOCK_MODE=1 ./executables/EGI1/optuna_control.sh
 EOF
 }
 

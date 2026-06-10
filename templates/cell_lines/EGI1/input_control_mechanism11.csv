@@ -1,19 +1,19 @@
 parameter_name,type,parameter_value
-### Mechanism-11 control (O2 only). Times: time_step [h]; dwell/time_window below are STEPS = hours/dt,###,###
+### Mech-11 control O2-only. time_step[h]=1/60 (1 min/step); 4320 steps = 72 h assay horizon,###,###
 output_directory,string,results_control
 simulation_title,string,control_mech11
 #,#,#
-number_of_time_steps,int,72
-time_step,float,1.0
-statistics_interval,int,1
+number_of_time_steps,int,4320
+time_step,float,0.016666666666666666
+statistics_interval,int,60
 export_visualization,bool,false
-visualization_interval,int,24
+visualization_interval,int,1440
 #,#,#
 min_boundary,float,-500.0
 max_boundary,float,500.0
 domain_tolerance,float,10.0
 migration_tolerance,float,0.00001
-safe_distance_ratio,float,0.999
+safe_distance_ratio,float,0.01
 simulation_domain_is_2D,bool,true
 simulation_domain_is_polar,bool,true
 simulation_domain_is_bounded,bool,true
@@ -36,27 +36,28 @@ necrotic_CC/initial_population,int,0
 necrotic_CC/mechanism_order,int,10
 #,#,#
 normoxic_CC/phenotype_ID,int,2
-normoxic_CC/initial_population,int,0
-normoxic_CC/initial_population/from_file,string,initial_cells.dat
+normoxic_CC/initial_population,int,100
+normoxic_CC/initial_population/pattern,string,sphere/inside
+normoxic_CC/initial_population/pattern/sphere/center/0,float,0.0
+normoxic_CC/initial_population/pattern/sphere/center/1,float,0.0
+normoxic_CC/initial_population/pattern/sphere/center/2,float,0.0
+normoxic_CC/initial_population/pattern/sphere/radius,float,150
 normoxic_CC/mechanism_order,int,11
 normoxic_CC/intracellular/damage/k_induction,float,0.0
 normoxic_CC/intracellular/damage/probability,float,0.0
 normoxic_CC/can_divide/CAP_sensitivity,float,0.0
 #,#,#
-### Cell cycle dwell [steps] = hours/time_step — fixed (EGI1 control fit); edit manually,###,###
-normoxic_CC/phase_dwell/G1,int,8
-normoxic_CC/phase_dwell/Sy,int,8
-normoxic_CC/phase_dwell/G2,int,4
+### Dwell/time_window ints = scheduler STEPS (real_hours = steps * time_step). Optuna fits hours,###,###
+normoxic_CC/phase_dwell/G1,int,494
+normoxic_CC/phase_dwell/Sy,int,476
+normoxic_CC/phase_dwell/G2,int,264
 normoxic_CC/phase_dwell/Di,int,0
 normoxic_CC/phase_dwell/max_arrest_time,int,999999
 normoxic_CC/can_apoptose,bool,true
 normoxic_CC/can_apoptose/probability,float,0.003
 normoxic_CC/can_apoptose/probability_increment_with_age,float,0.0
-normoxic_CC/can_apoptose/time_window,int,2500
-normoxic_CC/can_apoptose/time_window/to_delete,int,5000
-normoxic_CC/can_apoptose/O2/threshold,float,-0.5
-normoxic_CC/can_apoptose/O2/probability,float,0.8
-normoxic_CC/can_apoptose/O2/dependency,bool,false
+normoxic_CC/can_apoptose/time_window,int,150000
+normoxic_CC/can_apoptose/time_window/to_delete,int,300000
 normoxic_CC/can_grow,bool,true
 normoxic_CC/can_grow/probability,float,0.17951108
 normoxic_CC/can_grow/diameter_rate,float,10.244646
@@ -67,7 +68,7 @@ normoxic_CC/can_divide/probability_increment_with_age,float,0.0
 normoxic_CC/can_divide/diameter_cutoff,float,18.0
 normoxic_CC/can_divide/influence_ratio,float,0.0
 normoxic_CC/can_divide/max,int,8
-normoxic_CC/can_divide/time_window,int,5
+normoxic_CC/can_divide/time_window,int,324
 normoxic_CC/can_divide/O2/threshold,float,0.65
 normoxic_CC/can_transform_and_divide/O2/threshold,float,0.0
 normoxic_CC/can_divide_and_transform/O2/threshold,float,0.0
@@ -81,8 +82,4 @@ normoxic_CC/principal/1,float,1.0
 normoxic_CC/principal/2,float,1.0
 normoxic_CC/principal/min,float,0.999
 normoxic_CC/principal/max,float,1.001
-normoxic_CC/O2/secretion/net_balance,float,-0.001
-normoxic_CC/O2/secretion/net_balance/std,float,0.0
-normoxic_CC/O2/secretion/saturation,float,0.0
-normoxic_CC/O2/secretion/dependency,bool,false
 ### END,###,###

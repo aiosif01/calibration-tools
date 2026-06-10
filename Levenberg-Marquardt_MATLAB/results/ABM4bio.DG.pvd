@@ -1,8 +1,0 @@
-<?xml version="1.0"?>
-<VTKFile type="Collection" version="0.1" byte_order="LittleEndian">
-<Collection>
-  <DataSet timestep="24" group="" part="0" file="ABM4bio/diffusion_grid.24.vtu"/>
-  <DataSet timestep="48" group="" part="0" file="ABM4bio/diffusion_grid.48.vtu"/>
-  <DataSet timestep="72" group="" part="0" file="ABM4bio/diffusion_grid.72.vtu"/>
-</Collection>
-</VTKFile>

@@ -14,8 +14,10 @@ from .calibration_params import (
     CONTROL_FAST_RUNTIME_OVERRIDES,
     CONTROL_PROLIFERATION_OVERRIDES,
     build_mechanism11_runtime_overrides,
+    build_mechanism12_runtime_overrides,
     parameter_overrides_from_vector,
 )
+from .time_units import seconds_to_steps
 from .data_loader import select_target_vector
 
 
@@ -61,6 +63,12 @@ def control_runtime_overrides(mechanism: int, *, time_step_h: float = 1.0) -> di
     return overrides
 
 
+def treatment_runtime_overrides(mechanism: int, *, time_step_h: float = 1.0) -> dict[str, object]:
+    if mechanism == MECHANISM_12:
+        return dict(build_mechanism12_runtime_overrides(time_step_h))
+    return {}
+
+
 def load_targets(
     ctx: CalibrationContext,
     time_points: Sequence[int],
@@ -92,6 +100,8 @@ def make_simulate_factory(ctx: CalibrationContext, config: ABMRunConfig) -> Call
             row_overrides = dict(ctx.calibration_overrides)
             if ctx.control_mode:
                 row_overrides.update(control_runtime_overrides(ctx.mechanism, time_step_h=ctx.time_step_h))
+            elif ctx.mechanism == MECHANISM_12:
+                row_overrides.update(treatment_runtime_overrides(ctx.mechanism, time_step_h=ctx.time_step_h))
             row_overrides.update(
                 parameter_overrides_from_vector(
                     ctx.parameter_keys,
@@ -104,7 +114,7 @@ def make_simulate_factory(ctx: CalibrationContext, config: ABMRunConfig) -> Call
                 duration_steps = (
                     0
                     if ctx.exposure_seconds == 0
-                    else max(1, int(round(exposure_h / max(ctx.time_step_h, 1e-12))))
+                    else seconds_to_steps(float(ctx.exposure_seconds), ctx.time_step_h)
                 )
                 row_overrides.update({
                     "CAP/enabled": bool(ctx.exposure_seconds > 0),

@@ -3,8 +3,6 @@ Central calibration / optimization settings for calibration-tools.
 
 Edit this file to change templates, mechanism, Optuna budgets, early-stop, and
 per-cell-line defaults. CLI flags in run_optuna_control.py still override these.
-
-MATLAB reference (least-squares branch): Levenberg-Marquardt_MATLAB/ (mechanism 11).
 """
 from __future__ import annotations
 
@@ -20,47 +18,92 @@ EXECUTABLES_DIR = REPO_ROOT / "executables"
 # ---------------------------------------------------------------------------
 # Mechanism identifiers
 # ---------------------------------------------------------------------------
-MECHANISM_10 = 10
 MECHANISM_11 = 11
 MECHANISM_12 = 12
 
 DEFAULT_MECHANISM = MECHANISM_11
 
 # ---------------------------------------------------------------------------
-# MATLAB LM parity (Levenberg-Marquardt_MATLAB/main.m + input~TEMPLATE.csv)
+# Simulation clocks (ABM4bio time_step is always in hours; see abmcal/time_units.py)
 # ---------------------------------------------------------------------------
-# O2-only control. Dwell / divide maturity are in simulated HOURS (converted to steps via time_step).
-MECHANISM11_TIME_STEP_H = 1.0
+# Viability assay: 0, 24, 48, 72 h post-treatment (Excel targets). Control = untreated growth.
+# Mechanism 11 control: minute resolution (finer cell-cycle than 1 h/step).
+MECHANISM11_TIME_STEP_MINUTES = 1.0
 MECHANISM11_SIMULATION_HOURS = 72.0
+# Mechanism 12 CAP: second resolution for 30 s / 2 / 4 / 5 min plasma exposures.
+MECHANISM12_TIME_STEP_SECONDS = 1.0
+MECHANISM12_SIMULATION_HOURS = 72.0
+CAP_EXPOSURE_SECONDS: tuple[int, ...] = (30, 120, 240, 300)
+
+# Derived ABM time_step [h] (do not edit — use MINUTES/SECONDS above).
+MECHANISM11_TIME_STEP_H = MECHANISM11_TIME_STEP_MINUTES / 60.0
+MECHANISM12_TIME_STEP_H = MECHANISM12_TIME_STEP_SECONDS / 3600.0
 # Fixed cell-cycle timing (EGI1 control calibration 2025-06; not fitted — edit template manually).
 MECHANISM11_PHASE_DWELL_H: tuple[float, ...] = (8.2266921, 7.9340755, 4.407848, 0.0)  # G1, Sy, G2, Di [h]
 MECHANISM11_DIVIDE_MATURITY_H = 5.403776
 MECHANISM11_APOPTOSIS_AGING_ONSET_H = 2500.0
 MECHANISM11_APOPTOSIS_CLEANUP_H = 5000.0
 
-# x0/lb/ub: grow prob, diameter rate, divide prob, divide diameter cutoff, divide O2 threshold, diameter max
-MECHANISM11_X0: tuple[float, ...] = (0.17951108, 10.244646, 0.29564496, 18.0, 0.65, 20.0)
-MECHANISM11_LB: tuple[float, ...] = (0.0, 0.1, 0.0, 10.0, 0.0, 15.0)
-MECHANISM11_UB: tuple[float, ...] = (0.99, 25.0, 0.99, 22.0, 1.0, 30.0)
-MECHANISM11_PARAMETER_X_SCALE: tuple[float, ...] = (0.15, 3.0, 0.2, 3.0, 0.1, 2.0)
-
-# Legacy 3-parameter MATLAB LM names (superseded by MECHANISM11_* above)
-MATLAB_LM_X0: tuple[float, ...] = MECHANISM11_X0[:3]
-MATLAB_LM_LB: tuple[float, ...] = MECHANISM11_LB[:3]
-MATLAB_LM_UB: tuple[float, ...] = MECHANISM11_UB[:3]
-MATLAB_LM_SIGMA = 0.45
-MATLAB_LM_MAX_NFEV = 20_000
-MATLAB_LM_DIFF_STEP = 0.03
-MATLAB_LM_TIME_STEPS = 72
-MATLAB_LM_TIME_STEP_H = 1.0
-
+# x0/lb/ub: proliferation + size gates + cell cycle [h] + apoptosis (prob, aging onset [h])
+MECHANISM11_X0: tuple[float, ...] = (
+    0.17951108,
+    10.244646,
+    0.29564496,
+    18.0,
+    20.0,
+    8.2266921,
+    7.9340755,
+    4.407848,
+    5.403776,
+    0.0,
+    0.0,
+    0.003,
+    2500.0,
+)
+MECHANISM11_LB: tuple[float, ...] = (
+    0.0,
+    0.1,
+    0.0,
+    10.0,
+    15.0,
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.0,
+    0.0,
+    1.0e-5,
+    72.0,
+)
+MECHANISM11_UB: tuple[float, ...] = (
+    0.99,
+    25.0,
+    0.99,
+    22.0,
+    30.0,
+    24.0,
+    20.0,
+    12.0,
+    30.0,
+    5.0e-4,
+    4.0,
+    0.05,
+    5000.0,
+)
 MECHANISM11_PARAMETER_KEYS: tuple[str, ...] = (
     "normoxic_CC/can_grow/probability",
     "normoxic_CC/can_grow/diameter_rate",
     "normoxic_CC/can_divide/probability",
     "normoxic_CC/can_divide/diameter_cutoff",
-    "normoxic_CC/can_divide/O2/threshold",
     "normoxic_CC/diameter/max",
+    "normoxic_CC/phase_dwell/G1",
+    "normoxic_CC/phase_dwell/Sy",
+    "normoxic_CC/phase_dwell/G2",
+    "normoxic_CC/can_divide/time_window",
+    "normoxic_CC/can_divide/probability_increment_with_age",
+    "normoxic_CC/can_divide/influence_ratio",
+    "normoxic_CC/can_apoptose/probability",
+    "normoxic_CC/can_apoptose/time_window",
 )
 
 MECHANISM11_PLACEHOLDERS: tuple[str, ...] = ()
@@ -115,15 +158,6 @@ class EarlyStopSettings:
 
 
 @dataclass(frozen=True)
-class HorizonGateSettings:
-    """Do not advance 0-24h -> 0-48h -> 0-72h unless the current horizon fits."""
-
-    enabled: bool = True
-    min_sim_to_target: float = 0.55
-    max_sim_to_target: float = 2.5
-
-
-@dataclass(frozen=True)
 class CellLineSettings:
     cell_line: str
     mechanism: int = DEFAULT_MECHANISM
@@ -136,8 +170,8 @@ class CellLineSettings:
     ub: tuple[float, ...] = MECHANISM11_UB
     output_metric: str = "N_cells"
     cancer_phenotype_id: int = 2
-    copy_files: tuple[Path, ...] = (TEMPLATES_DIR / "initial_cells.dat",)
-    initial_population: int = 1118
+    copy_files: tuple[Path, ...] = ()
+    initial_population: int = 100
 
 
 def _cell_template(cell_line: str, name: str) -> Path:
@@ -157,8 +191,8 @@ def _default_cell_line(cell_line: str) -> CellLineSettings:
         ub=MECHANISM11_UB,
         output_metric="N_cells",
         cancer_phenotype_id=2,
-        copy_files=(TEMPLATES_DIR / "initial_cells.dat",),
-        initial_population=1118,
+        copy_files=(),
+        initial_population=100,
     )
 
 
@@ -171,21 +205,11 @@ CELL_LINE_SETTINGS: Mapping[str, CellLineSettings] = {
 OPTUNA = OptunaSettings()
 OPTIMIZER = OPTUNA
 EARLY_STOP = EarlyStopSettings()
-HORIZON_GATE = HorizonGateSettings()
 
 TARGETS_CSV = DATA_DIR / "calibration_targets_from_excel.csv"
 XLSX_DEFAULT = DATA_DIR / (
     "Data Modeling CCA+PDAC 0 to 72h post Gorjet - WITH MEAN 4 experiments.xlsx"
 )
-
-# Legacy / alternate templates (not default)
-LEGACY_TEMPLATES = {
-    "mechanism10_control": TEMPLATES_DIR / "input_control_mechanism10_template.csv",
-    "mechanism11_base": TEMPLATES_DIR / "input_control_mechanism11_template.csv",
-    "mechanism12_cap": TEMPLATES_DIR / "input_mechanism12_CAP_template.csv",
-    "matlab_lm": REPO_ROOT / "Levenberg-Marquardt_MATLAB" / "input~TEMPLATE.csv",
-}
-
 
 def get_cell_line_settings(cell_line: str) -> CellLineSettings:
     key = cell_line.strip()
@@ -216,6 +240,32 @@ def resolve_control_template(cell_line: str) -> Path:
             f"Control template missing for {cell_line}: {cfg.control_template}"
         )
     return cfg.control_template
+
+
+def mechanism11_simulation_clock() -> "SimulationClock":
+    from abmcal.time_units import SimulationClock, hours_to_steps, minutes_to_time_step_h
+
+    dt_h = minutes_to_time_step_h(MECHANISM11_TIME_STEP_MINUTES)
+    return SimulationClock(
+        label=f"mech-11 control ({MECHANISM11_TIME_STEP_MINUTES:g} min/step)",
+        time_step_h=dt_h,
+        simulation_hours=MECHANISM11_SIMULATION_HOURS,
+        statistics_interval_steps=max(1, hours_to_steps(1.0, dt_h)),
+        visualization_interval_steps=max(1, hours_to_steps(24.0, dt_h)),
+    )
+
+
+def mechanism12_simulation_clock() -> "SimulationClock":
+    from abmcal.time_units import SimulationClock, hours_to_steps, seconds_to_time_step_h
+
+    dt_h = seconds_to_time_step_h(MECHANISM12_TIME_STEP_SECONDS)
+    return SimulationClock(
+        label=f"mech-12 CAP ({MECHANISM12_TIME_STEP_SECONDS:g} s/step)",
+        time_step_h=dt_h,
+        simulation_hours=MECHANISM12_SIMULATION_HOURS,
+        statistics_interval_steps=max(1, hours_to_steps(1.0, dt_h)),
+        visualization_interval_steps=max(1, hours_to_steps(24.0, dt_h)),
+    )
 
 
 def resolve_treated_template(cell_line: str) -> Path:

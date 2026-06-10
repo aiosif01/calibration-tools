@@ -74,10 +74,28 @@ def export_best_parameters(
     study: optuna.Study,
     parameter_keys: Sequence[str],
     out_path: str | Path,
+    *,
+    time_step_h: float = 1.0,
 ) -> pd.DataFrame:
+    from abmcal.time_units import is_time_parameter_in_hours, optimizer_hours_to_abm_value
+
     best = study.best_trial
     values = [float(best.params.get(key, np.nan)) for key in parameter_keys]
-    df = pd.DataFrame({"parameter_name": list(parameter_keys), "fitted_value": values})
+    units: list[str] = []
+    abm_values: list[float] = []
+    for key, val in zip(parameter_keys, values):
+        if is_time_parameter_in_hours(key):
+            units.append("h")
+            abm_values.append(float(optimizer_hours_to_abm_value(key, val, time_step_h=time_step_h)))
+        else:
+            units.append("")
+            abm_values.append(val)
+    df = pd.DataFrame({
+        "parameter_name": list(parameter_keys),
+        "fitted_value": values,
+        "unit": units,
+        "abm_csv_value": abm_values,
+    })
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(out_path, index=False)
     return df

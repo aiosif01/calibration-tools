@@ -1,6 +1,0 @@
-
-Project "ABM4bio" started... [ /home/aiwsif/Desktop/ABM4bio/build/ABM4bio input.csv]
-Parameter read complete...
-[input file: input.csv; 1 biochemicals; 2 cell phenotypes]
-Simulation initializes...
-Error in < *** @file /home/aiwsif/Desktop/ABM4bio/src/./ABM4bio.h @line 2570>: "normoxic_CC" with phenotype ID "2" has erroneous diameter

@@ -145,38 +145,3 @@ def compute_scalar_objective(
     if not include_penalty:
         return curve_score
     return curve_score + biological_penalty(y_data, y_sim)
-
-
-def evaluate_horizon_acceptance(
-    t: Sequence[float],
-    y_data: Sequence[float],
-    y_sim: Sequence[float],
-    *,
-    min_sim_to_target: float = 0.55,
-    max_sim_to_target: float = 2.5,
-) -> tuple[bool, str]:
-    """Return whether sim/target at each t>0 is within [min, max] ratios."""
-    t_arr = np.asarray(t, dtype=float)
-    y_data = np.asarray(y_data, dtype=float)
-    y_sim = np.asarray(y_sim, dtype=float)
-    if len(y_data) < 2:
-        return True, "no post-t0 time points"
-    for time_h, target, sim in zip(t_arr[1:], y_data[1:], y_sim[1:]):
-        if not np.isfinite(target) or target <= 0:
-            continue
-        if not np.isfinite(sim):
-            return False, f"t={int(time_h)}h simulation is non-finite"
-        ratio = float(sim / target)
-        if ratio < min_sim_to_target:
-            return (
-                False,
-                f"t={int(time_h)}h sim/target={ratio:.3f} < {min_sim_to_target} "
-                f"(sim={sim:.4g}, target={target:.4g})",
-            )
-        if ratio > max_sim_to_target:
-            return (
-                False,
-                f"t={int(time_h)}h sim/target={ratio:.3f} > {max_sim_to_target} "
-                f"(sim={sim:.4g}, target={target:.4g})",
-            )
-    return True, "accepted"

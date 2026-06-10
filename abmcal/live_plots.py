@@ -137,7 +137,7 @@ class LiveCalibrationPlotter:
         y_data: Sequence[float],
         y_fit: Sequence[float],
         sigma_y: Sequence[float] | None = None,
-        prefix: str = "lm_python",
+        prefix: str = "optuna",
     ) -> None:
         import pandas as pd
 

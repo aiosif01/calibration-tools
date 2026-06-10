@@ -3,11 +3,11 @@ parameter_name,type,parameter_value
 output_directory,string,results_CAP_mech12
 simulation_title,string,CAP_mech12_control
 #,#,#
-number_of_time_steps,int,7200
-time_step,float,0.01
-statistics_interval,int,1
-export_visualization,bool,true
-visualization_interval,int,100
+number_of_time_steps,int,259200
+time_step,float,0.0002777777777777778
+statistics_interval,int,3600
+export_visualization,bool,false
+visualization_interval,int,86400
 #,#,#
 min_boundary,float,-400.0
 max_boundary,float,400.0

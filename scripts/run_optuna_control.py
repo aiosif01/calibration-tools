@@ -30,7 +30,12 @@ from abmcal.early_stop import compute_early_stop_max_cells
 from abmcal.live_plots import LiveCalibrationPlotter
 from abmcal.method.optuna_engine import OptunaRunConfig, run_optuna_calibration
 from abmcal.method.parameter_space import load_parameter_space_yaml, parameter_space_from_bounds
-from abmcal.time_units import read_template_time_step_hours
+from abmcal.time_units import (
+    format_time_conversion_audit,
+    read_template_time_step_hours,
+    validate_simulation_clock,
+)
+from config.calibration_settings import mechanism11_simulation_clock
 
 
 def parse_int_list(s: str) -> list[int]:
@@ -127,6 +132,9 @@ def main() -> None:
         target_df = read_cap_excel_long(args.xlsx, recompute_mean=True)
 
     template_path = Path(args.template or resolve_control_template(args.cell_line))
+    control_clock = mechanism11_simulation_clock()
+    time_step_h = read_template_time_step_hours(template_path, default=control_clock.time_step_h)
+    time_report = validate_simulation_clock(template_path, time_points, control_clock)
     exposure_label = exposure_pretty(0)
     out_dir = Path(args.out_dir or control_out_dir(args.cell_line))
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -171,7 +179,7 @@ def main() -> None:
         target_df=target_df,
         target_mode=target_mode,
         calibration_overrides=calibration_input_overrides(template_path, mechanism=cell_settings.mechanism),
-        time_step_h=read_template_time_step_hours(template_path, default=1.0),
+        time_step_h=time_step_h,
         control_mode=True,
         set_cap_duration=False,
         copy_files=tuple(Path(x) for x in args.copy_file if x),
@@ -202,6 +210,18 @@ def main() -> None:
         )
         print(f"  Template: {template_path}", flush=True)
         print(f"  Storage: {args.storage}", flush=True)
+        print(f"  {control_clock.describe()}", flush=True)
+        print(f"  Assay targets (h): {list(time_report.calibration_time_points_h)}", flush=True)
+        for warning in time_report.warnings:
+            print(f"  TIME WARNING: {warning}", flush=True)
+        print(
+            format_time_conversion_audit(
+                template_path,
+                parameter_space.names,
+                clock=control_clock,
+            ),
+            flush=True,
+        )
 
     plotter = LiveCalibrationPlotter(
         out_dir,

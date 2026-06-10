@@ -122,7 +122,12 @@ def run_optuna_calibration(
     parameter_keys = list(parameter_space.names)
     export_trial_history(study, trials_dir / "trial_history.csv")
     export_failed_trials(study, trials_dir / "failed_trials.csv")
-    export_best_parameters(study, parameter_keys, out_dir / "calibrated_parameters.csv")
+    export_best_parameters(
+        study,
+        parameter_keys,
+        out_dir / "calibrated_parameters.csv",
+        time_step_h=ctx.time_step_h,
+    )
 
     best_params = [float(study.best_params[key]) for key in parameter_keys]
     best_trial = study.best_trial

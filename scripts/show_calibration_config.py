@@ -20,9 +20,11 @@ from abmcal.calibration_config import (  # noqa: E402
     resolve_control_template,
     resolve_treated_template,
 )
+from abmcal.time_units import format_time_conversion_audit, validate_simulation_clock  # noqa: E402
 from config.calibration_settings import (  # noqa: E402
-    MECHANISM11_SIMULATION_HOURS,
-    MECHANISM11_TIME_STEP_H,
+    CAP_EXPOSURE_SECONDS,
+    mechanism11_simulation_clock,
+    mechanism12_simulation_clock,
 )
 
 
@@ -90,11 +92,12 @@ def main() -> None:
     print(f"  studies_dir: {_path_str(OPTUNA.studies_dir)}")
     print(f"Early stop: enabled={EARLY_STOP.enabled}, overgrowth_factor={EARLY_STOP.overgrowth_factor}")
     print(f"Targets CSV: {_path_str(TARGETS_CSV)}")
-    print(
-        f"Mechanism-11 timing: dt={MECHANISM11_TIME_STEP_H} h, "
-        f"simulation={MECHANISM11_SIMULATION_HOURS} h "
-        f"({int(MECHANISM11_SIMULATION_HOURS / MECHANISM11_TIME_STEP_H)} steps)"
-    )
+    m11_clock = mechanism11_simulation_clock()
+    m12_clock = mechanism12_simulation_clock()
+    print(f"Mechanism-11 control clock: {m11_clock.describe()}")
+    print(f"Mechanism-12 CAP clock:      {m12_clock.describe()}")
+    print(f"  CAP exposures (s): {list(CAP_EXPOSURE_SECONDS)}")
+    print("  Optuna time-parameter bounds are in simulated HOURS; ABM CSV uses integer steps.")
     print()
     for name in lines:
         entry = payload["cell_lines"][name]
@@ -102,6 +105,15 @@ def main() -> None:
         print(f"  control:  {entry['control_template']}")
         print(f"  treated:  {entry['treated_template']}")
         print(f"  params:   {', '.join(entry['parameter_keys'])}")
+        tpl = Path(entry["control_template"])
+        if tpl.is_file():
+            report = validate_simulation_clock(tpl, OPTUNA.time_points, m11_clock)
+            print(f"  control template: {m11_clock.describe()}")
+            for warning in report.warnings:
+                print(f"  TIME WARNING: {warning}")
+            audit = format_time_conversion_audit(tpl, entry["parameter_keys"], clock=m11_clock)
+            for line in audit.splitlines():
+                print(f"  {line}")
         print()
 
 

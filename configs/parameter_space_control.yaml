@@ -1,5 +1,14 @@
 # Control proliferation parameter space (mechanism 11 — normoxic_CC).
-# Bounds match config/calibration_settings.py MECHANISM11_LB / MECHANISM11_UB.
+#
+# TIME UNITS (ABM4bio):
+#   - Control clock: 1 min/step → time_step = 1/60 h, 4320 steps = 72 h assay.
+#   - stats.csv current_time = step_index * time_step [h] (still in hours).
+#   - phase_dwell/*, can_divide/time_window, can_apoptose/time_window in input.csv are
+#     INTEGER STEP COUNTS in standalone ABM runs.
+#   - Parameters marked [h] below are sampled in simulated HOURS; Python converts
+#     abm_steps = round(hours / time_step) before each ABM evaluation.
+#
+# Non-time parameters (probability, µm) are unitless / physical as in ABM4bio.
 cell_line_specific: true
 
 parameters:
@@ -27,14 +36,59 @@ parameters:
     high: 22.0
     scale: linear
 
-  normoxic_CC/can_divide/O2/threshold:
-    type: float
-    low: 0.0
-    high: 1.0
-    scale: linear
-
   normoxic_CC/diameter/max:
     type: float
     low: 15.0
     high: 30.0
     scale: linear
+
+  normoxic_CC/phase_dwell/G1:  # [h] G1 phase dwell
+    type: float
+    low: 1.0
+    high: 24.0
+    scale: linear
+
+  normoxic_CC/phase_dwell/Sy:  # [h] S-phase dwell
+    type: float
+    low: 1.0
+    high: 20.0
+    scale: linear
+
+  normoxic_CC/phase_dwell/G2:  # [h] G2 phase dwell
+    type: float
+    low: 1.0
+    high: 12.0
+    scale: linear
+
+  normoxic_CC/can_divide/time_window:  # [h] divide maturity (per division round)
+    type: float
+    low: 1.0
+    high: 30.0
+    scale: linear
+
+  # Per scheduler step (GetAge is in ABM steps, not hours).
+  normoxic_CC/can_divide/probability_increment_with_age:
+    type: float
+    low: 0.0
+    high: 5.0e-4
+    scale: linear
+
+  # Local crowding search radius = influence_ratio × cell diameter; 0 disables.
+  # ABM default can_divide/max_occupancy=1.0 applies when influence_ratio > 0.
+  normoxic_CC/can_divide/influence_ratio:
+    type: float
+    low: 0.0
+    high: 4.0
+    scale: linear
+
+  normoxic_CC/can_apoptose/probability:
+    type: float
+    low: 1.0e-5
+    high: 0.05
+    scale: log
+
+  normoxic_CC/can_apoptose/time_window:  # [h] min cell age before aging apoptosis
+    type: float
+    low: 72.0
+    high: 5000.0
+    scale: log
