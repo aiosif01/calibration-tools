@@ -1,0 +1,39 @@
+cell_line_specific: true
+
+parameters:
+  normoxic_CC/can_grow/probability:
+    type: float
+    low: 0.0
+    high: 0.99
+    scale: linear
+
+  normoxic_CC/can_grow/diameter_rate:
+    type: float
+    low: 0.1
+    high: 25.0
+    scale: log
+
+  normoxic_CC/can_divide/probability:
+    type: float
+    low: 0.0
+    high: 0.99
+    scale: linear
+
+  normoxic_CC/can_divide/diameter_cutoff:
+    type: float
+    low: 10.0
+    high: 22.0
+    scale: linear
+
+  normoxic_CC/can_divide/O2/threshold:
+    type: float
+    low: 0.0
+    high: 1.0
+    scale: linear
+
+  normoxic_CC/diameter/max:
+    type: float
+    # Must be >= max diameter in templates/initial_cells.dat (~20.0) or ABM4bio aborts at startup.
+    low: 20.0
+    high: 30.0
+    scale: linear

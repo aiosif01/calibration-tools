@@ -1,0 +1,7 @@
+n_samples: 1000
+debug_n_samples: 100
+seeds_per_sample: 3
+ensemble_size: 5
+inverse_restarts: 20
+inverse_steps: 5000
+validation_replicates: 10

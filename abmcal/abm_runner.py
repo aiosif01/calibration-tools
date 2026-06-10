@@ -18,6 +18,55 @@ from .input_template import render_template
 from .stats_metrics import read_output_vector
 
 
+def _initial_cell_diameter_range(initial_cells_path: Path) -> tuple[float, float] | None:
+    diameters: list[float] = []
+    for line in initial_cells_path.read_text().splitlines():
+        parts = line.split()
+        if len(parts) < 4:
+            continue
+        try:
+            diameters.append(float(parts[3]))
+        except ValueError:
+            continue
+    if not diameters:
+        return None
+    return min(diameters), max(diameters)
+
+
+def _validate_initial_cell_diameter_bounds(
+    parameter_overrides: Mapping[str, Any] | None,
+    initial_cells_path: Path,
+    *,
+    phenotype_prefix: str = "normoxic_CC",
+) -> None:
+    """Fail fast when sampled diameter limits exclude cells in initial_cells.dat."""
+    if not parameter_overrides or not initial_cells_path.is_file():
+        return
+    dia_range = _initial_cell_diameter_range(initial_cells_path)
+    if dia_range is None:
+        return
+
+    cell_dia_min, cell_dia_max = dia_range
+    min_key = f"{phenotype_prefix}/diameter/min"
+    max_key = f"{phenotype_prefix}/diameter/max"
+    if min_key in parameter_overrides:
+        dia_min = float(parameter_overrides[min_key])
+        if dia_min > cell_dia_min + 1e-6:
+            raise RuntimeError(
+                f"{min_key}={dia_min} exceeds the smallest initial cell diameter "
+                f"({cell_dia_min}) in {initial_cells_path.name}; ABM4bio would abort with "
+                "'erroneous diameter'."
+            )
+    if max_key in parameter_overrides:
+        dia_max = float(parameter_overrides[max_key])
+        if dia_max < cell_dia_max - 1e-6:
+            raise RuntimeError(
+                f"{max_key}={dia_max} is below the largest initial cell diameter "
+                f"({cell_dia_max}) in {initial_cells_path.name}; ABM4bio would abort with "
+                "'erroneous diameter'."
+            )
+
+
 @dataclass
 class ABMRunConfig:
     template_path: Path
@@ -88,6 +137,8 @@ def run_abm_once(
             results_dir = run_dir / out_dir_name
             if results_dir.exists():
                 shutil.rmtree(results_dir)
+
+    _validate_initial_cell_diameter_bounds(parameter_overrides, run_dir / "initial_cells.dat")
 
     placeholder_values = {name: value for name, value in zip(placeholder_names, params)}
     render_template(

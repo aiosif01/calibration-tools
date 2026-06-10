@@ -1,10 +1,10 @@
 """
 Central calibration / optimization settings for calibration-tools.
 
-Edit this file to change templates, mechanism, LM budgets, early-stop, and
-per-cell-line defaults. CLI flags in calibrate_one_case.py still override these.
+Edit this file to change templates, mechanism, ANN budgets, early-stop, and
+per-cell-line defaults. CLI flags in generate_ann_dataset.py / calibrate_with_ann.py override these.
 
-MATLAB reference: Levenberg-Marquardt_MATLAB/ (mechanism 11; control is O2-only, no RONS).
+MATLAB reference (least-squares branch): Levenberg-Marquardt_MATLAB/ (mechanism 11).
 """
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ MECHANISM11_APOPTOSIS_CLEANUP_H = 5000.0
 
 # x0/lb/ub: grow prob, diameter rate, divide prob, divide diameter cutoff, divide O2 threshold, diameter max
 MECHANISM11_X0: tuple[float, ...] = (0.17951108, 10.244646, 0.29564496, 18.0, 0.65, 20.0)
-MECHANISM11_LB: tuple[float, ...] = (0.0, 0.1, 0.0, 10.0, 0.0, 15.0)
+MECHANISM11_LB: tuple[float, ...] = (0.0, 0.1, 0.0, 10.0, 0.0, 20.0)
 MECHANISM11_UB: tuple[float, ...] = (0.99, 25.0, 0.99, 22.0, 1.0, 30.0)
 MECHANISM11_PARAMETER_X_SCALE: tuple[float, ...] = (0.15, 3.0, 0.2, 3.0, 0.1, 2.0)
 
@@ -66,29 +66,41 @@ MECHANISM11_PARAMETER_KEYS: tuple[str, ...] = (
 MECHANISM11_PLACEHOLDERS: tuple[str, ...] = ()
 
 # ---------------------------------------------------------------------------
-# Shared optimization defaults (scipy.optimize.least_squares / staged control)
+# ANN surrogate calibration defaults (ANN branch)
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
-class OptimizerSettings:
-    method: str = "trf"
-    staged: bool = True
-    log_space: bool = True
+class ANNSettings:
+    n_samples: int = 1000
+    debug_n_samples: int = 100
+    seeds_per_sample: int = 3
+    sampling: str = "lhs"
+    dataset_seed: int = 1234
+    ensemble_seeds: tuple[int, ...] = (100, 200, 300, 400, 500)
+    learning_rate: float = 1e-3
+    weight_decay: float = 1e-4
+    batch_size: int = 64
+    max_epochs: int = 2000
+    patience: int = 100
+    val_fraction: float = 0.2
+    test_fraction: float = 0.1
+    inverse_restarts: int = 20
+    inverse_steps: int = 5000
+    inverse_lr: float = 0.03
+    validation_replicates: int = 10
     normalize_sim_to_t0: bool = True
+    log_space: bool = True
     target_mode: str = "t0_normalized"
     time_points: tuple[int, ...] = (0, 24, 48, 72)
-    global_nfev: int = 0
-    global_seed: int = 1234
-    stage_nfev: tuple[int, ...] = (40, 40, 150)
     use_abm_seed: bool = False
-    max_nfev_single: int = 150
-    replicates: int = 2
     abm_base_seed: int = 1234
     abm_seed_step: int = 17
-    diff_step: float = MATLAB_LM_DIFF_STEP
-    xtol: float = 1e-6
-    ftol: float = 1e-6
-    gtol: float = 1e-6
-    sigma: str = "data"
+    parameter_space_control: Path = field(
+        default_factory=lambda: REPO_ROOT / "configs" / "parameter_space_control.yaml"
+    )
+    parameter_space_treatment: Path = field(
+        default_factory=lambda: REPO_ROOT / "configs" / "parameter_space_treatment.yaml"
+    )
+    outputs_dir: Path = field(default_factory=lambda: REPO_ROOT / "outputs" / "ann")
 
 
 @dataclass(frozen=True)
@@ -155,7 +167,7 @@ CELL_LINE_SETTINGS: Mapping[str, CellLineSettings] = {
     name: _default_cell_line(name) for name in CELL_LINES
 }
 
-OPTIMIZER = OptimizerSettings()
+ANN = ANNSettings()
 EARLY_STOP = EarlyStopSettings()
 HORIZON_GATE = HorizonGateSettings()
 
@@ -181,8 +193,16 @@ def get_cell_line_settings(cell_line: str) -> CellLineSettings:
     return CELL_LINE_SETTINGS[key]
 
 
+def ann_out_dir(cell_line: str, case_label: str = "control") -> Path:
+    return ANN.outputs_dir / cell_line / case_label
+
+
 def control_out_dir(cell_line: str) -> Path:
-    return EXECUTABLES_DIR / cell_line / "outputs" / "calibration_control"
+    return ann_out_dir(cell_line, "control")
+
+
+def treatment_out_dir(cell_line: str, exposure_seconds: int) -> Path:
+    return ann_out_dir(cell_line, f"treat_{exposure_seconds}s")
 
 
 def resolve_control_template(cell_line: str) -> Path:

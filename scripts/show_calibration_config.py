@@ -1,100 +1,62 @@
 #!/usr/bin/env python3
-"""Print resolved calibration settings (edit config/calibration_settings.py to change defaults)."""
+"""Print resolved ANN calibration settings."""
 from __future__ import annotations
 
 import argparse
 import json
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from abmcal.calibration_config import (  # noqa: E402
-    CELL_LINES,
-    EARLY_STOP,
-    HORIZON_GATE,
-    OPTIMIZER,
-    TARGETS_CSV,
-    get_cell_line_settings,
-    resolve_control_template,
-    resolve_treated_template,
-)
-from config.calibration_settings import (  # noqa: E402
-    MECHANISM11_SIMULATION_HOURS,
-    MECHANISM11_TIME_STEP_H,
-)
+from abmcal.calibration_config import ANN, CELL_LINES, TARGETS_CSV, get_cell_line_settings, resolve_control_template  # noqa: E402
 
 
-def _path_str(p: Path) -> str:
+def _path_str(p: Path | str) -> str:
+    path = Path(p)
     try:
-        return str(p.relative_to(ROOT))
+        return str(path.relative_to(ROOT))
     except ValueError:
-        return str(p)
+        return str(path)
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Show central calibration configuration.")
-    ap.add_argument("--cell-line", default=None, help="Show one cell line (default: all)")
-    ap.add_argument("--json", action="store_true", help="Machine-readable JSON output")
+    ap = argparse.ArgumentParser(description="Show ANN calibration configuration.")
+    ap.add_argument("--cell-line", default=None)
+    ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
-    lines = args.cell_line.strip() if args.cell_line else list(CELL_LINES)
-    if isinstance(lines, str):
-        lines = [lines]
-
-    payload = {
-        "optimizer": OPTIMIZER.__dict__,
-        "early_stop": EARLY_STOP.__dict__,
-        "horizon_gate": HORIZON_GATE.__dict__,
-        "targets_csv": _path_str(TARGETS_CSV),
-        "cell_lines": {},
-    }
+    lines = [args.cell_line] if args.cell_line else list(CELL_LINES)
+    payload = {"ann": asdict(ANN), "cell_lines": {}}
+    for key, val in payload["ann"].items():
+        if isinstance(val, Path):
+            payload["ann"][key] = _path_str(val)
 
     for name in lines:
         cfg = get_cell_line_settings(name)
         payload["cell_lines"][name] = {
-            "mechanism": cfg.mechanism,
-            "control_template": _path_str(resolve_control_template(name)),
-            "treated_template": _path_str(resolve_treated_template(name)),
             "parameter_keys": list(cfg.parameter_keys),
-            "x0": list(cfg.x0),
             "lb": list(cfg.lb),
             "ub": list(cfg.ub),
-            "output_metric": cfg.output_metric,
-            "copy_files": [_path_str(p) for p in cfg.copy_files],
+            "control_template": _path_str(resolve_control_template(name)),
         }
 
     if args.json:
         print(json.dumps(payload, indent=2))
         return
 
-    print("Calibration settings (config/calibration_settings.py)")
+    print("ANN calibration settings (config/calibration_settings.py)")
     print("=" * 60)
-    print(f"Optimizer: method={OPTIMIZER.method}, staged={OPTIMIZER.staged}, stage_nfev={OPTIMIZER.stage_nfev}")
-    print(f"  horizons: 0-24h -> 0-48h -> 0-72h, use_abm_seed={OPTIMIZER.use_abm_seed}")
-    print(f"  global_nfev={OPTIMIZER.global_nfev}, max_nfev_single={OPTIMIZER.max_nfev_single}, replicates={OPTIMIZER.replicates}")
-    print(f"Early stop: enabled={EARLY_STOP.enabled}, overgrowth_factor={EARLY_STOP.overgrowth_factor}")
-    print(
-        f"Horizon gate: enabled={HORIZON_GATE.enabled}, "
-        f"sim/target in [{HORIZON_GATE.min_sim_to_target}, {HORIZON_GATE.max_sim_to_target}]"
-    )
-    print(f"Targets CSV: {_path_str(TARGETS_CSV)}")
-    print(
-        f"Mechanism-11 timing: dt={MECHANISM11_TIME_STEP_H} h, "
-        f"simulation={MECHANISM11_SIMULATION_HOURS} h "
-        f"({int(MECHANISM11_SIMULATION_HOURS / MECHANISM11_TIME_STEP_H)} steps); "
-        "cell-cycle dwell/maturity fixed in template; size/O2 gates fitted"
-    )
-    print()
+    print(f"Dataset: n_samples={ANN.n_samples}, seeds_per_sample={ANN.seeds_per_sample}, sampling={ANN.sampling}")
+    print(f"Training: max_epochs={ANN.max_epochs}, ensemble={len(ANN.ensemble_seeds)} models")
+    print(f"Inverse: restarts={ANN.inverse_restarts}, steps={ANN.inverse_steps}, validation_replicates={ANN.validation_replicates}")
+    print(f"Outputs: {_path_str(ANN.outputs_dir)}")
+    print(f"Targets: {_path_str(TARGETS_CSV)}")
     for name in lines:
         entry = payload["cell_lines"][name]
-        print(f"[{name}] mechanism {entry['mechanism']}")
-        print(f"  control:  {entry['control_template']}")
-        print(f"  treated:  {entry['treated_template']}")
-        print(f"  params:   {', '.join(entry['parameter_keys'])}")
-        print(f"  x0:       {entry['x0']}")
-        print()
+        print(f"\n[{name}] params: {', '.join(entry['parameter_keys'])}")
 
 
 if __name__ == "__main__":
